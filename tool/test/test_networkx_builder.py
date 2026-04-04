@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import importlib
+import json
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -121,6 +123,100 @@ class TestNetworkXGraphStorage(unittest.TestCase):
 	def test_raw_graph_returns_digraph(self) -> None:
 		raw = self.storage.raw_graph()
 		self.assertEqual(raw.__class__.__name__, "DiGraph")
+
+	def test_json_round_trip_preserves_nodes_edges_and_metadata(self) -> None:
+		source = Node(entity_type="Pod", name="web", namespace="default", risk_score=7.5, is_source=True)
+		target = Node(entity_type="Secret", name="db-creds", namespace="default", risk_score=9.0, is_sink=True)
+		edge = Edge(
+			source_id=source.node_id,
+			target_id=target.node_id,
+			relationship_type="can_read",
+			weight=4.4,
+		)
+
+		storage = NetworkXGraphStorage()
+		storage.add_nodes([source, target])
+		storage.add_edge(edge)
+
+		with tempfile.TemporaryDirectory() as tmp_dir:
+			artifact = Path(tmp_dir) / "cluster-graph.json"
+			storage.save_json(artifact)
+			loaded = NetworkXGraphStorage.from_json_file(artifact)
+
+		self.assertEqual(
+			{(n.node_id, n.risk_score, n.is_source, n.is_sink) for n in storage.all_nodes()},
+			{(n.node_id, n.risk_score, n.is_source, n.is_sink) for n in loaded.all_nodes()},
+		)
+		self.assertEqual(
+			{(e.source_id, e.target_id, e.relationship_type, e.weight) for e in storage.all_edges()},
+			{(e.source_id, e.target_id, e.relationship_type, e.weight) for e in loaded.all_edges()},
+		)
+
+	def test_from_exported_json_keeps_cycles(self) -> None:
+		payload = {
+			"schema_version": "1.0.0",
+			"nodes": [
+				{
+					"node_id": "Role:default:a",
+					"entity_type": "Role",
+					"name": "a",
+					"namespace": "default",
+					"risk_score": 1.0,
+					"is_source": False,
+					"is_sink": False,
+				},
+				{
+					"node_id": "Role:default:b",
+					"entity_type": "Role",
+					"name": "b",
+					"namespace": "default",
+					"risk_score": 1.0,
+					"is_source": False,
+					"is_sink": False,
+				},
+			],
+			"edges": [
+				{
+					"source_id": "Role:default:a",
+					"target_id": "Role:default:b",
+					"relationship_type": "admin",
+					"weight": 1.0,
+				},
+				{
+					"source_id": "Role:default:b",
+					"target_id": "Role:default:a",
+					"relationship_type": "admin",
+					"weight": 1.0,
+				},
+			],
+		}
+
+		loaded = NetworkXGraphStorage.from_exported_json(payload)
+		self.assertFalse(loaded.is_dag())
+		self.assertEqual(len(loaded.all_edges()), 2)
+
+	def test_from_json_file_rejects_node_id_mismatch(self) -> None:
+		payload = {
+			"schema_version": "1.0.0",
+			"nodes": [
+				{
+					"node_id": "Pod:default:wrong",
+					"entity_type": "Pod",
+					"name": "web",
+					"namespace": "default",
+					"risk_score": 1.0,
+					"is_source": False,
+					"is_sink": False,
+				}
+			],
+			"edges": [],
+		}
+
+		with tempfile.TemporaryDirectory() as tmp_dir:
+			artifact = Path(tmp_dir) / "cluster-graph.json"
+			artifact.write_text(json.dumps(payload), encoding="utf-8")
+			with self.assertRaises(ValueError):
+				NetworkXGraphStorage.from_json_file(artifact)
 
 
 if __name__ == "__main__":

@@ -21,14 +21,14 @@ This plan reflects current repository progress and the exact remaining work for 
 - Pod CVSS or CVE annotation parsing into risk_score enrichment is implemented in [src/ingestion/kubectl_runner.py](src/ingestion/kubectl_runner.py).
 - Export behavior and enrichment tests are implemented in [test/test_main_export.py](test/test_main_export.py) and [test/test_kubectl_runner.py](test/test_kubectl_runner.py).
 
-3. Phase 3 Graph Construction: mostly completed
+3. Phase 3 Graph Construction: completed
 - NetworkX graph storage/builder exists in [src/graph/networkx_builder.py](src/graph/networkx_builder.py).
 - Graph construction from normalized in-memory data is implemented via `from_cluster_graph_data(...)`.
 - Graph-layer unit coverage exists in [test/test_networkx_builder.py](test/test_networkx_builder.py).
-- Remaining: explicit artifact read flow from exported cluster-graph.json.
-- Remaining: round-trip validation (exported JSON -> graph rebuild -> equivalent nodes/edges).
-- Remaining: reconstruction tests that verify edge weights and relationship types are preserved.
-- Remaining: clear handling/documentation for cycle presence during artifact-based graph reconstruction.
+- Artifact read flow from exported cluster-graph.json is implemented via `from_exported_json(...)` and `from_json_file(...)`.
+- Round-trip validation coverage (exported JSON -> graph rebuild -> equivalent nodes/edges) is implemented in [test/test_networkx_builder.py](test/test_networkx_builder.py).
+- Reconstruction tests verify edge weights and relationship types are preserved in [test/test_networkx_builder.py](test/test_networkx_builder.py).
+- Cycle-presence handling for artifact-based reconstruction is explicitly documented and covered by tests in [src/graph/networkx_builder.py](src/graph/networkx_builder.py) and [test/test_networkx_builder.py](test/test_networkx_builder.py).
 
 4. Phase 4 Core Security Algorithms: completed baseline
 - BFS in [src/analysis/blast_radius.py](src/analysis/blast_radius.py).
@@ -61,13 +61,7 @@ This plan reflects current repository progress and the exact remaining work for 
 - Keep regression coverage for ingestion and export in [test/test_kubectl_runner.py](test/test_kubectl_runner.py), [test/test_mock_parser.py](test/test_mock_parser.py), and [test/test_main_export.py](test/test_main_export.py).
 - Keep exported schema backward-compatible for downstream frontend/API consumers.
 
-2. Complete Phase 3 artifact import and validation
-- Add explicit graph reconstruction from exported JSON using [src/graph/networkx_builder.py](src/graph/networkx_builder.py).
-- Add tests verifying exported graph round-trips into equivalent node and edge sets.
-- Add tests for reconstruction accuracy of edge metadata (relationship_type and weight).
-- Document reconstruction behavior when cycles exist (do not hard-fail; allow analysis to report cycles).
-
-3. Strengthen Phase 4 with integration checks
+2. Strengthen Phase 4 with integration checks
 - Add integration tests that compare vulnerable and secure behavior:
 - vulnerable namespace: non-zero source-to-secret path expected
 - secure namespace: no critical secret path expected
@@ -79,14 +73,14 @@ This plan reflects current repository progress and the exact remaining work for 
 - Wire penalty metadata through [src/ingestion/kubectl_runner.py](src/ingestion/kubectl_runner.py) so [src/analysis/shortest_path.py](src/analysis/shortest_path.py) naturally reflects risk in `total_cost`.
 - Add targeted tests for each pattern in [test/test_kubectl_runner.py](test/test_kubectl_runner.py) and path-score impact checks in [test/test_shortest_path.py](test/test_shortest_path.py).
 
-4. Complete Phase 5 PDF deliverable
+3. Complete Phase 5 PDF deliverable
 - Implement [src/reporting/pdf_generator.py](src/reporting/pdf_generator.py).
 - Extend [src/main.py](src/main.py) with PDF output option.
 - Update [src/reporting/cli_formatter.py](src/reporting/cli_formatter.py) to match the requested sample output format exactly.
 - Add formatter tests for exact line-level style expectations (warning line, hop/risk line, blast-radius and cycles summary lines).
 - Add smoke test for PDF generation and section parity with CLI output.
 
-5. Stabilize release checklist
+4. Stabilize release checklist
 - Run all tests in [test](test) using uv.
 - Verify namespace-scoped runs for both environments.
 - Verify artifact outputs: cluster-graph.json and PDF.

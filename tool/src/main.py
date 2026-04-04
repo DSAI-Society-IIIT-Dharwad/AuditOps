@@ -19,15 +19,19 @@ from reporting.cli_formatter import render_cli_report
 
 def main() -> int:
     args = _parse_args()
-
-    if args.ingestor == "mock":
-        ingestor = MockDataIngestor(file_path=args.mock_file)
+    if args.graph_in:
+        storage = NetworkXGraphStorage.from_json_file(args.graph_in)
+        graph_data = storage.to_cluster_graph_data()
     else:
-        ingestor = KubectlDataIngestor(fallback_file=args.fallback_file, namespace=args.namespace)
+        if args.ingestor == "mock":
+            ingestor = MockDataIngestor(file_path=args.mock_file)
+        else:
+            ingestor = KubectlDataIngestor(fallback_file=args.fallback_file, namespace=args.namespace)
 
-    graph_data = ingestor.ingest()
+        graph_data = ingestor.ingest()
+        storage = NetworkXGraphStorage.from_cluster_graph_data(graph_data)
+
     _export_graph_data(graph_data, args.graph_out)
-    storage = NetworkXGraphStorage.from_cluster_graph_data(graph_data)
 
     source_id = _resolve_source_id(storage, args.source, namespace=args.namespace)
     sink_ids = _resolve_sink_ids(storage, args.target, namespace=args.namespace)
@@ -66,6 +70,11 @@ def _parse_args() -> argparse.Namespace:
         "--mock-file",
         default="mock-cluster-graph.json",
         help="Path to mock JSON file (used when --ingestor mock)",
+    )
+    parser.add_argument(
+        "--graph-in",
+        default=None,
+        help="Optional path to exported cluster graph JSON to load directly",
     )
     parser.add_argument(
         "--graph-out",

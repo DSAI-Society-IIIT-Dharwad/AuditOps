@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import importlib
+import io
 import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import sys
 
@@ -57,6 +59,76 @@ class TestMainExport(unittest.TestCase):
             exported = json.loads(out_path.read_text(encoding="utf-8"))
             self.assertEqual(exported["schema_version"], "1.0.0")
             self.assertEqual(exported["nodes"][0]["node_id"], "Pod:default:p1")
+
+    def test_main_uses_graph_in_artifact_without_invoking_ingestors(self) -> None:
+        payload = {
+            "schema_version": "1.0.0",
+            "nodes": [
+                {
+                    "node_id": "Pod:default:web",
+                    "entity_type": "Pod",
+                    "name": "web",
+                    "namespace": "default",
+                    "risk_score": 3.0,
+                    "is_source": True,
+                    "is_sink": False,
+                },
+                {
+                    "node_id": "Secret:default:db-creds",
+                    "entity_type": "Secret",
+                    "name": "db-creds",
+                    "namespace": "default",
+                    "risk_score": 8.0,
+                    "is_source": False,
+                    "is_sink": True,
+                },
+            ],
+            "edges": [
+                {
+                    "source_id": "Pod:default:web",
+                    "target_id": "Secret:default:db-creds",
+                    "relationship_type": "can_read",
+                    "weight": 2.0,
+                }
+            ],
+        }
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            graph_in = Path(tmp_dir) / "in.json"
+            graph_out = Path(tmp_dir) / "out.json"
+            graph_in.write_text(json.dumps(payload), encoding="utf-8")
+
+            with patch.object(
+                main_mod,
+                "KubectlDataIngestor",
+                side_effect=AssertionError("kubectl ingestor should not be used when --graph-in is set"),
+            ), patch.object(
+                main_mod,
+                "MockDataIngestor",
+                side_effect=AssertionError("mock ingestor should not be used when --graph-in is set"),
+            ), patch.object(
+                main_mod,
+                "render_cli_report",
+                return_value="ok\n",
+            ), patch.object(
+                sys,
+                "argv",
+                [
+                    "main.py",
+                    "--graph-in",
+                    str(graph_in),
+                    "--graph-out",
+                    str(graph_out),
+                ],
+            ), patch.object(main_mod.sys, "stdout", new=io.StringIO()):
+                code = main_mod.main()
+
+            self.assertEqual(code, 0)
+            self.assertTrue(graph_out.exists())
+            exported = json.loads(graph_out.read_text(encoding="utf-8"))
+            self.assertEqual(exported["schema_version"], "1.0.0")
+            self.assertEqual(len(exported["nodes"]), 2)
+            self.assertEqual(len(exported["edges"]), 1)
 
 
 if __name__ == "__main__":
