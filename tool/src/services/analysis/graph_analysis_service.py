@@ -14,7 +14,6 @@ from main import (
     _build_recommendations,
     _calculate_blast_radius_by_source,
     _enumerate_attack_paths,
-    _enumerate_best_attack_paths,
     _find_best_attack_path,
     _rank_critical_nodes_from_paths,
     _resolve_sink_ids,
@@ -128,7 +127,7 @@ def _build_graph_analysis_response(
         sink_ids=sink_ids,
         max_depth=max_depth,
     )
-    attack_paths = _enumerate_best_attack_paths(storage, source_ids=source_ids, sink_ids=sink_ids)[:18]
+    attack_paths = all_attack_paths
     blast_result = calculate_blast_radius(storage, source_id=source_id, max_hops=max_hops)
     blast_radius_by_source = _calculate_blast_radius_by_source(storage, source_ids=source_ids, max_hops=max_hops)
     cycles = detect_cycles(storage)
@@ -191,7 +190,7 @@ def _build_graph_analysis_response(
         "baseline_attack_paths": len(all_attack_paths),
         "critical_nodes": critical_nodes,
         "summary": {
-            "attack_paths_found": len(attack_paths),
+            "attack_paths_found": len(all_attack_paths),
             "cycles_found": len(cycles),
             "blast_nodes_exposed": total_blast_exposed,
             "critical_node": critical_nodes[0]["node_id"] if critical_nodes else "none",

@@ -398,6 +398,70 @@ select {
   overflow: hidden;
 }
 
+.path-hover-panel {
+  padding: 10px;
+  background: rgba(13, 28, 50, 0.84);
+  display: grid;
+  gap: 8px;
+}
+
+.path-hover-panel-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.path-hover-panel-head strong {
+  color: #ffe4d5;
+  font-family: "Sora", sans-serif;
+  letter-spacing: 0.1em;
+  font-size: 11px;
+}
+
+.path-hover-list {
+  display: grid;
+  gap: 6px;
+  max-height: 204px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.path-hover-item {
+  width: 100%;
+  border: 1px solid rgba(67, 70, 86, 0.58);
+  border-radius: 8px;
+  background: rgba(28, 42, 65, 0.5);
+  padding: 8px;
+  text-align: left;
+  display: grid;
+  gap: 5px;
+}
+
+.path-hover-item:hover,
+.path-hover-item.active {
+  border-color: rgba(255, 226, 142, 0.75);
+  background: rgba(255, 226, 142, 0.14);
+}
+
+.path-hover-item-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.path-hover-item-route {
+  font-size: 11px;
+  color: #f2f7ff;
+}
+
 .graph-canvas-wrap {
   position: relative;
 }

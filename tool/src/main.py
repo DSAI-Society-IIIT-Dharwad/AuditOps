@@ -64,7 +64,7 @@ def main() -> int:
         sink_ids=sink_ids,
         max_depth=args.max_depth,
     )
-    attack_paths = _enumerate_best_attack_paths(storage, source_ids=source_ids, sink_ids=sink_ids)[:18]
+    attack_paths = all_attack_paths
     blast_result = calculate_blast_radius(storage, source_id=source_id, max_hops=args.max_hops)
     blast_radius_by_source = _calculate_blast_radius_by_source(storage, source_ids=source_ids, max_hops=args.max_hops)
     cycles = detect_cycles(storage)
@@ -124,7 +124,7 @@ def main() -> int:
         "baseline_attack_paths": len(all_attack_paths),
         "critical_nodes": critical_nodes,
         "summary": {
-            "attack_paths_found": len(attack_paths),
+            "attack_paths_found": len(all_attack_paths),
             "cycles_found": len(cycles),
             "blast_nodes_exposed": total_blast_exposed,
             "critical_node": critical_nodes[0]["node_id"] if critical_nodes else "none",
@@ -348,9 +348,16 @@ def _resolve_source_ids(storage: NetworkXGraphStorage, explicit_source: str | No
     nodes = _nodes_in_scope(storage, namespace)
     flagged = [node.node_id for node in nodes if node.is_source]
     if flagged:
-        return flagged
+        return sorted(set(flagged))
 
-    return [_resolve_source_id(storage, explicit_source, namespace=namespace)]
+    pod_candidates = sorted(node.node_id for node in nodes if node.entity_type == "Pod")
+    if pod_candidates:
+        return pod_candidates
+
+    if nodes:
+        return sorted(node.node_id for node in nodes)
+
+    return []
 
 
 def _nodes_in_scope(storage: NetworkXGraphStorage, namespace: str | None):

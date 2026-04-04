@@ -1,14 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { useAnalysis } from "../app/AnalysisProvider";
+import AttackPathList from "../components/graph/AttackPathList";
 import GraphCanvas from "../components/graph/GraphCanvas";
 import ReportPanel from "../components/risk/ReportPanel";
 import { fetchGraphAnalysisFromContent, GraphApiError } from "../lib/apiClient";
 
 export default function IngestPage() {
   const {
-    namespace,
-    setNamespace,
     includeClusterRbac,
     setIncludeClusterRbac,
     enableNvdScoring,
@@ -27,10 +26,13 @@ export default function IngestPage() {
 
   const [contentFormat, setContentFormat] = useState("auto");
   const [content, setContent] = useState("");
+  const [ingestNamespace, setIngestNamespace] = useState("");
   const [payload, setPayload] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [selectedNodeId, setSelectedNodeId] = useState(null);
+  const [hoveredPath, setHoveredPath] = useState(null);
+  const [hoveredPathKey, setHoveredPathKey] = useState(null);
 
   useEffect(() => {
     const nodes = Array.isArray(payload?.nodes) ? payload.nodes : [];
@@ -52,7 +54,13 @@ export default function IngestPage() {
 
   const summary = useMemo(() => payload?.summary || {}, [payload]);
   const report = useMemo(() => payload?.report || {}, [payload]);
+  const attackPaths = useMemo(() => (Array.isArray(report.attack_paths) ? report.attack_paths : []), [report]);
   const temporal = useMemo(() => payload?.temporal || report?.temporal || {}, [payload, report]);
+
+  useEffect(() => {
+    setHoveredPath(null);
+    setHoveredPathKey(null);
+  }, [payload]);
 
   const onAnalyze = async () => {
     const trimmed = content.trim();
@@ -71,7 +79,7 @@ export default function IngestPage() {
       const response = await fetchGraphAnalysisFromContent({
         content: trimmed,
         format: contentFormat,
-        namespace,
+        namespace: ingestNamespace.trim() || null,
         includeClusterRbac,
         enableNvdScoring,
         maxHops,
@@ -111,8 +119,9 @@ export default function IngestPage() {
             <label htmlFor="ingest-namespace">Namespace</label>
             <input
               id="ingest-namespace"
-              value={namespace}
-              onChange={(event) => setNamespace(event.target.value)}
+              value={ingestNamespace}
+              onChange={(event) => setIngestNamespace(event.target.value)}
+              placeholder="(optional) all namespaces"
             />
           </div>
 
@@ -257,9 +266,23 @@ export default function IngestPage() {
                 showBlastRadius={showBlastRadius}
                 showCriticalNode={showCriticalNode}
                 selectedNodeId={selectedNodeId}
+                hoveredPath={hoveredPath}
                 onSelectNode={setSelectedNodeId}
               />
             </div>
+
+            <AttackPathList
+              attackPaths={attackPaths}
+              hoveredPathKey={hoveredPathKey}
+              onHoverPath={(path, pathKey) => {
+                setHoveredPath(path || null);
+                setHoveredPathKey(pathKey || null);
+              }}
+              onLeavePath={() => {
+                setHoveredPath(null);
+                setHoveredPathKey(null);
+              }}
+            />
 
             <div className="data-ribbon">
               <span>ATTACK PATHS: {report.summary?.attack_paths_found || 0}</span>

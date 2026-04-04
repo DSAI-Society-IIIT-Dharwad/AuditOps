@@ -51,9 +51,11 @@ export default function GraphCanvas({
   showBlastRadius,
   showCriticalNode,
   selectedNodeId,
+  hoveredPath,
   onSelectNode,
 }) {
   const hostRef = useRef(null);
+  const cyRef = useRef(null);
   const [popover, setPopover] = useState(null);
 
   useEffect(() => {
@@ -292,6 +294,25 @@ export default function GraphCanvas({
             },
           },
           {
+            selector: "node.path-muted",
+            style: {
+              opacity: 0.16,
+              "text-opacity": 0.35,
+            },
+          },
+          {
+            selector: "node.path-hover",
+            style: {
+              "border-color": "#ffe28e",
+              "border-width": 4,
+              "shadow-color": "#ffe28e",
+              "shadow-opacity": 0.52,
+              "shadow-blur": 24,
+              opacity: 1,
+              "text-opacity": 1,
+            },
+          },
+          {
             selector: "edge",
             style: {
               width: "mapData(weight, 0, 10, 1.5, 5)",
@@ -340,6 +361,21 @@ export default function GraphCanvas({
               opacity: 0.15,
             },
           },
+          {
+            selector: "edge.path-muted",
+            style: {
+              opacity: 0.08,
+            },
+          },
+          {
+            selector: "edge.path-hover",
+            style: {
+              "line-color": "#ffe28e",
+              "target-arrow-color": "#ffe28e",
+              width: 5,
+              opacity: 1,
+            },
+          },
         ],
         layout: {
           name: "dagre",
@@ -356,6 +392,7 @@ export default function GraphCanvas({
           padding: 42,
         },
       });
+      cyRef.current = cy;
 
       cy.on("mouseover", "node", (event) => {
         const focusSet = event.target.closedNeighborhood();
@@ -409,8 +446,65 @@ export default function GraphCanvas({
       if (cy) {
         cy.destroy();
       }
+      cyRef.current = null;
     };
   }, [payload, showAttackPath, showBlastRadius, showCriticalNode, selectedNodeId, onSelectNode]);
+
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy) {
+      return;
+    }
+
+    const hoveredNodeIds = new Set();
+    const hoveredEdgePairs = new Set();
+
+    if (Array.isArray(hoveredPath?.path)) {
+      for (const nodeId of hoveredPath.path) {
+        hoveredNodeIds.add(String(nodeId));
+      }
+      for (let index = 0; index < hoveredPath.path.length - 1; index += 1) {
+        hoveredEdgePairs.add(`${hoveredPath.path[index]}->${hoveredPath.path[index + 1]}`);
+      }
+    }
+
+    if (Array.isArray(hoveredPath?.edges)) {
+      for (const edge of hoveredPath.edges) {
+        const source = String(edge?.source || "");
+        const target = String(edge?.target || "");
+        if (!source || !target) {
+          continue;
+        }
+        hoveredNodeIds.add(source);
+        hoveredNodeIds.add(target);
+        hoveredEdgePairs.add(`${source}->${target}`);
+      }
+    }
+
+    cy.elements().removeClass("path-hover path-muted");
+
+    if (hoveredNodeIds.size === 0 && hoveredEdgePairs.size === 0) {
+      return;
+    }
+
+    cy.elements().addClass("path-muted");
+
+    cy.nodes().forEach((node) => {
+      if (hoveredNodeIds.has(String(node.id()))) {
+        node.removeClass("path-muted");
+        node.addClass("path-hover");
+      }
+    });
+
+    cy.edges().forEach((edge) => {
+      const source = String(edge.data("source") || "");
+      const target = String(edge.data("target") || "");
+      if (hoveredEdgePairs.has(`${source}->${target}`)) {
+        edge.removeClass("path-muted");
+        edge.addClass("path-hover");
+      }
+    });
+  }, [hoveredPath, payload]);
 
   return (
     <div className="graph-canvas-wrap">
