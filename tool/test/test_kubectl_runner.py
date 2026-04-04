@@ -305,11 +305,16 @@ class TestBuildClusterGraphData(unittest.TestCase):
 		}
 
 		scorer = Mock()
-		scorer.score_image.return_value = Mock(max_cvss=7.5)
+		scorer.score_image.return_value = Mock(max_cvss=7.5, cve_ids=("CVE-2024-1111", "CVE-2024-2222"))
 
 		graph = build_cluster_graph_data(payload, cve_scorer=scorer)
 		pod = next(node for node in graph.nodes if node.node_id == "Pod:default:web")
 		self.assertAlmostEqual(pod.risk_score, 12.5, places=3)
+		self.assertTrue(pod.nvd_enriched)
+		self.assertEqual(pod.nvd_source, "nvd")
+		self.assertAlmostEqual(float(pod.nvd_max_cvss or 0.0), 7.5, places=3)
+		self.assertEqual(pod.nvd_cve_ids, ("CVE-2024-1111", "CVE-2024-2222"))
+		self.assertEqual(pod.nvd_image_refs, ("nginx:1.25.3",))
 
 	def test_annotation_cvss_overrides_live_cve_lookup(self) -> None:
 		payload = {
@@ -343,6 +348,9 @@ class TestBuildClusterGraphData(unittest.TestCase):
 		graph = build_cluster_graph_data(payload, cve_scorer=scorer)
 		pod = next(node for node in graph.nodes if node.node_id == "Pod:default:web")
 		self.assertAlmostEqual(pod.risk_score, 14.0, places=3)
+		self.assertTrue(pod.nvd_enriched)
+		self.assertEqual(pod.nvd_source, "annotation")
+		self.assertAlmostEqual(float(pod.nvd_max_cvss or 0.0), 9.0, places=3)
 		scorer.score_image.assert_not_called()
 
 	def test_live_cve_lookup_failures_do_not_break_ingestion(self) -> None:
@@ -373,6 +381,8 @@ class TestBuildClusterGraphData(unittest.TestCase):
 		graph = build_cluster_graph_data(payload, cve_scorer=scorer)
 		pod = next(node for node in graph.nodes if node.node_id == "Pod:default:web")
 		self.assertAlmostEqual(pod.risk_score, 5.0, places=3)
+		self.assertFalse(pod.nvd_enriched)
+		self.assertEqual(pod.nvd_cve_ids, ())
 
 
 class TestKubectlDataIngestor(unittest.TestCase):
@@ -489,6 +499,9 @@ class TestKubectlDataIngestor(unittest.TestCase):
 		graph = build_cluster_graph_data(payload)
 		pod = next(node for node in graph.nodes if node.node_id == "Pod:default:web")
 		self.assertAlmostEqual(pod.risk_score, 13.1, places=3)
+		self.assertTrue(pod.nvd_enriched)
+		self.assertEqual(pod.nvd_source, "annotation")
+		self.assertAlmostEqual(float(pod.nvd_max_cvss or 0.0), 8.1, places=3)
 
 	def test_pod_cve_annotation_adds_default_risk_bonus(self) -> None:
 		payload = {
@@ -518,6 +531,10 @@ class TestKubectlDataIngestor(unittest.TestCase):
 		graph = build_cluster_graph_data(payload)
 		pod = next(node for node in graph.nodes if node.node_id == "Pod:default:web")
 		self.assertAlmostEqual(pod.risk_score, 7.0, places=3)
+		self.assertTrue(pod.nvd_enriched)
+		self.assertEqual(pod.nvd_source, "annotation")
+		self.assertEqual(pod.nvd_cve_ids, ("CVE-2024-1234",))
+		self.assertIsNone(pod.nvd_max_cvss)
 
 
 if __name__ == "__main__":

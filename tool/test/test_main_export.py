@@ -123,6 +123,8 @@ class TestMainExport(unittest.TestCase):
                     str(graph_in),
                     "--graph-out",
                     str(graph_out),
+                    "--snapshot-dir",
+                    str(Path(tmp_dir) / "snapshots"),
                 ],
             ), patch.object(main_mod.sys, "stdout", new=io.StringIO()):
                 code = main_mod.main()
@@ -184,6 +186,8 @@ class TestMainExport(unittest.TestCase):
                     str(graph_out),
                     "--pdf-out",
                     str(pdf_out),
+                    "--snapshot-dir",
+                    str(Path(tmp_dir) / "snapshots"),
                 ],
             ), patch.object(main_mod.sys, "stdout", new=io.StringIO()):
                 code = main_mod.main()
@@ -224,6 +228,8 @@ class TestMainExport(unittest.TestCase):
                     "false",
                     "--graph-out",
                     str(graph_out),
+                    "--snapshot-dir",
+                    str(Path(tmp_dir) / "snapshots"),
                 ],
             ), patch.object(main_mod.sys, "stdout", new=io.StringIO()):
                 kubectl_ingestor_cls.return_value.ingest.return_value = graph

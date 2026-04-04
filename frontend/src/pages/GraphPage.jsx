@@ -31,6 +31,7 @@ export default function GraphPage() {
 
   const summary = useMemo(() => payload?.summary || {}, [payload]);
   const report = useMemo(() => payload?.report || {}, [payload]);
+  const temporal = useMemo(() => payload?.temporal || report?.temporal || {}, [payload, report]);
   const [selectedNodeId, setSelectedNodeId] = useState(null);
 
   useEffect(() => {
@@ -54,13 +55,22 @@ export default function GraphPage() {
   }, [payload, selectedNodeId]);
 
   const contextLine = useMemo(() => {
+    const newAttackPaths = Number(temporal?.new_attack_paths_count || 0);
+    if (newAttackPaths > 0) {
+      return `Temporal alert: ${newAttackPaths} new attack path(s) appeared since the previous scan.`;
+    }
+
+    if (temporal?.is_first_snapshot) {
+      return "Baseline snapshot created. Run another scan to detect temporal drift.";
+    }
+
     const topPath = report.attack_paths?.[0];
     if (!topPath) {
       return "No attack path currently detected between selected sources and sinks.";
     }
 
     return `Lateral movement path found from ${nodeDisplayName(topPath.source)} to ${nodeDisplayName(topPath.target)} (${topPath.hops || 0} hops).`;
-  }, [report]);
+  }, [report, temporal]);
 
   const onLoad = () => {
     refreshAnalysis({
@@ -210,6 +220,7 @@ export default function GraphPage() {
             <span>ATTACK PATHS: {report.summary?.attack_paths_found || 0}</span>
             <span>CYCLES: {report.summary?.cycles_found || 0}</span>
             <span>EXPOSED: {report.summary?.blast_nodes_exposed || 0}</span>
+            <span>NEW PATH ALERTS: {temporal?.new_attack_paths_count || 0}</span>
           </div>
         </div>
 

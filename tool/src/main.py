@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import argparse
-from datetime import datetime
+from datetime import UTC, datetime
 import json
 from pathlib import Path
 import sys
@@ -20,10 +20,15 @@ from ingestion.mock_parser import MockDataIngestor
 from reporting.cli_formatter import render_cli_report
 from reporting.pdf_generator import generate_pdf_report
 from services.cve.nvd_scorer import NVDCveScorer
+from services.temporal import build_scope_id, compute_temporal_analysis, load_previous_snapshot, save_snapshot
 
 
 def main() -> int:
     args = _parse_args()
+    include_cluster_rbac = _parse_bool_flag(args.include_cluster_rbac)
+    enable_nvd_scoring = _parse_bool_flag(args.enable_nvd_scoring)
+    ingestor_mode = "graph-in" if args.graph_in else args.ingestor
+
     if args.graph_in:
         storage = NetworkXGraphStorage.from_json_file(args.graph_in)
         graph_data = storage.to_cluster_graph_data()
@@ -34,9 +39,9 @@ def main() -> int:
             kubectl_kwargs: dict[str, Any] = {
                 "fallback_file": args.fallback_file,
                 "namespace": args.namespace,
-                "include_cluster_rbac": _parse_bool_flag(args.include_cluster_rbac),
+                "include_cluster_rbac": include_cluster_rbac,
             }
-            if _parse_bool_flag(args.enable_nvd_scoring):
+            if enable_nvd_scoring:
                 kubectl_kwargs["cve_scorer"] = NVDCveScorer(
                     api_key=args.nvd_api_key,
                     timeout=args.nvd_timeout,
@@ -76,6 +81,34 @@ def main() -> int:
         top_n=5,
     )
 
+    temporal_scope_id = build_scope_id(
+        namespace=args.namespace,
+        include_cluster_rbac=include_cluster_rbac,
+        ingestor=ingestor_mode,
+        enable_nvd_scoring=enable_nvd_scoring,
+        source="cli",
+    )
+    snapshot_timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+    previous_snapshot = None
+    temporal_error: str | None = None
+    try:
+        previous_snapshot = load_previous_snapshot(
+            temporal_scope_id,
+            snapshot_dir=args.snapshot_dir,
+        )
+    except Exception as exc:  # pragma: no cover - defensive runtime guard
+        temporal_error = f"Failed to load previous snapshot: {exc}"
+
+    temporal = compute_temporal_analysis(
+        current_storage=storage,
+        previous_snapshot=previous_snapshot,
+        namespace=args.namespace,
+        scope_id=temporal_scope_id,
+        snapshot_timestamp=snapshot_timestamp,
+    )
+    if temporal_error:
+        temporal["snapshot_error"] = temporal_error
+
     metadata = {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "nodes": len(storage.all_nodes()),
@@ -106,10 +139,30 @@ def main() -> int:
         "cycles": cycles,
         "critical_node": critical_result.to_dict() if critical_result is not None else {},
         "recommendations": _build_recommendations(attack_path_result, critical_result, cycles),
+        "temporal": temporal,
     }
 
+    try:
+        saved_snapshot = save_snapshot(
+            graph_data,
+            scope_id=temporal_scope_id,
+            namespace=args.namespace,
+            include_cluster_rbac=include_cluster_rbac,
+            ingestor=ingestor_mode,
+            enable_nvd_scoring=enable_nvd_scoring,
+            source="cli",
+            snapshot_dir=args.snapshot_dir,
+            snapshot_timestamp=snapshot_timestamp,
+        )
+        report["temporal"]["current_snapshot_path"] = str(saved_snapshot.path)
+    except Exception as exc:  # pragma: no cover - defensive runtime guard
+        report["temporal"]["snapshot_error"] = f"Failed to save snapshot: {exc}"
+
+    selected_modes = _selected_report_modes(args)
+    report_to_render = _select_report_view(report, selected_modes)
+
     _export_pdf_report(report, args.pdf_out)
-    sys.stdout.write(render_cli_report(report))
+    sys.stdout.write(render_cli_report(report_to_render))
     return 0
 
 
@@ -140,6 +193,11 @@ def _parse_args() -> argparse.Namespace:
         "--fallback-file",
         default=None,
         help="Optional fallback JSON if kubectl ingestion fails",
+    )
+    parser.add_argument(
+        "--snapshot-dir",
+        default=None,
+        help="Optional directory for temporal snapshots (defaults to tool/out/snapshots).",
     )
     parser.add_argument(
         "--include-cluster-rbac",
@@ -176,7 +234,67 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--max-hops", type=int, default=3, help="Max hops for blast radius BFS")
     parser.add_argument("--max-depth", type=int, default=8, help="Max DFS depth used in critical-node path counting")
+    parser.add_argument(
+        "--full-report",
+        action="store_true",
+        help="Render full kill-chain report with all sections.",
+    )
+    parser.add_argument(
+        "--attack-path",
+        action="store_true",
+        help="Render only the shortest attack-path section (Dijkstra).",
+    )
+    parser.add_argument(
+        "--blast-radius",
+        action="store_true",
+        help="Render only blast-radius section (BFS).",
+    )
+    parser.add_argument(
+        "--cycles",
+        action="store_true",
+        help="Render only cycle-detection section (DFS).",
+    )
+    parser.add_argument(
+        "--critical-node",
+        action="store_true",
+        help="Render only critical-node analysis section.",
+    )
     return parser.parse_args()
+
+
+def _selected_report_modes(args: argparse.Namespace) -> dict[str, bool]:
+    modes = {
+        "full_report": bool(getattr(args, "full_report", False)),
+        "attack_path": bool(getattr(args, "attack_path", False) or args.source or args.target),
+        "blast_radius": bool(getattr(args, "blast_radius", False)),
+        "cycles": bool(getattr(args, "cycles", False)),
+        "critical_node": bool(getattr(args, "critical_node", False)),
+    }
+
+    if not any(modes.values()):
+        modes["full_report"] = True
+
+    return modes
+
+
+def _select_report_view(full_report: dict[str, Any], modes: dict[str, bool]) -> dict[str, Any]:
+    if modes.get("full_report"):
+        return full_report
+
+    selected: dict[str, Any] = {}
+    if modes.get("attack_path"):
+        selected["attack_path"] = full_report.get("attack_path", {})
+    if modes.get("blast_radius"):
+        selected["blast_radius"] = full_report.get("blast_radius", {})
+    if modes.get("cycles"):
+        selected["cycles"] = full_report.get("cycles", [])
+    if modes.get("critical_node"):
+        selected["critical_node"] = full_report.get("critical_node", {})
+
+    # Keep remediation visible even in focused algorithm mode output.
+    selected["recommendations"] = full_report.get("recommendations", [])
+    selected["temporal"] = full_report.get("temporal", {})
+    return selected
 
 
 def _resolve_source_id(storage: NetworkXGraphStorage, explicit_source: str | None, *, namespace: str | None) -> str:

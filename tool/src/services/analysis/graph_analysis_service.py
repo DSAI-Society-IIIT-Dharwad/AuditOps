@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
 from analysis.blast_radius import calculate_blast_radius
@@ -28,6 +29,7 @@ from services.contracts.graph_analysis_contract import (
     build_edges,
     build_nodes,
 )
+from services.temporal import build_scope_id, compute_temporal_analysis, load_previous_snapshot, save_snapshot
 
 
 def get_graph_analysis(
@@ -46,6 +48,21 @@ def get_graph_analysis(
     )
     graph_data = ingestor.ingest()
     storage = NetworkXGraphStorage.from_cluster_graph_data(graph_data)
+
+    temporal_scope_id = build_scope_id(
+        namespace=namespace,
+        include_cluster_rbac=include_cluster_rbac,
+        ingestor="kubectl",
+        enable_nvd_scoring=enable_nvd_scoring,
+        source="api",
+    )
+    snapshot_timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+    previous_snapshot = None
+    temporal_error: str | None = None
+    try:
+        previous_snapshot = load_previous_snapshot(temporal_scope_id)
+    except Exception as exc:  # pragma: no cover - defensive runtime guard
+        temporal_error = f"Failed to load previous snapshot: {exc}"
 
     source_id = _resolve_source_id(storage, explicit_source=None, namespace=namespace)
     source_ids = _resolve_source_ids(storage, explicit_source=None, namespace=namespace)
@@ -75,12 +92,23 @@ def get_graph_analysis(
         top_n=5,
     )
 
+    temporal = compute_temporal_analysis(
+        current_storage=storage,
+        previous_snapshot=previous_snapshot,
+        namespace=namespace,
+        scope_id=temporal_scope_id,
+        snapshot_timestamp=snapshot_timestamp,
+    )
+    if temporal_error:
+        temporal["snapshot_error"] = temporal_error
+    temporal_node_rows = _build_temporal_node_rows(temporal)
+
     nodes = storage.all_nodes()
     edges = storage.all_edges()
     edge_rows, edge_ids_by_pair = build_edges(edges)
 
     response = build_base_response(namespace=namespace, nodes=nodes, edges=edges)
-    response["nodes"] = build_nodes(nodes)
+    response["nodes"] = build_nodes(nodes, temporal_node_by_id=temporal_node_rows)
     response["edges"] = edge_rows
     response["analysis"] = {
         "attack_path": build_attack_path(
@@ -115,5 +143,55 @@ def get_graph_analysis(
             "blast_nodes_exposed": total_blast_exposed,
             "critical_node": critical_nodes[0]["node_id"] if critical_nodes else "none",
         },
+        "temporal": temporal,
     }
+
+    response["temporal"] = temporal
+
+    try:
+        saved_snapshot = save_snapshot(
+            graph_data,
+            scope_id=temporal_scope_id,
+            namespace=namespace,
+            include_cluster_rbac=include_cluster_rbac,
+            ingestor="kubectl",
+            enable_nvd_scoring=enable_nvd_scoring,
+            source="api",
+            snapshot_timestamp=snapshot_timestamp,
+        )
+        response["temporal"]["current_snapshot_path"] = str(saved_snapshot.path)
+        response["report"]["temporal"]["current_snapshot_path"] = str(saved_snapshot.path)
+    except Exception as exc:  # pragma: no cover - defensive runtime guard
+        response["temporal"]["snapshot_error"] = f"Failed to save snapshot: {exc}"
+        response["report"]["temporal"]["snapshot_error"] = response["temporal"]["snapshot_error"]
+
     return response
+
+
+def _build_temporal_node_rows(temporal: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    node_rows: dict[str, dict[str, Any]] = {}
+    node_changes = temporal.get("node_changes") if isinstance(temporal.get("node_changes"), dict) else {}
+
+    for added in node_changes.get("added", []):
+        if not isinstance(added, dict):
+            continue
+        node_id = str(added.get("node_id") or "").strip()
+        if not node_id:
+            continue
+        node_rows[node_id] = {
+            "status": "added",
+            "risk_delta": None,
+        }
+
+    for changed in node_changes.get("risk_changed", []):
+        if not isinstance(changed, dict):
+            continue
+        node_id = str(changed.get("node_id") or "").strip()
+        if not node_id:
+            continue
+        node_rows[node_id] = {
+            "status": "risk_changed",
+            "risk_delta": changed.get("risk_delta"),
+        }
+
+    return node_rows

@@ -18,6 +18,7 @@ export default function RisksPage() {
   } = useAnalysis();
 
   const report = useMemo(() => payload?.report || {}, [payload]);
+  const temporal = useMemo(() => payload?.temporal || report?.temporal || {}, [payload, report]);
   const criticalNodes = report.critical_nodes || [];
   const topPaths = (report.attack_paths || []).slice(-5).reverse();
 
@@ -101,6 +102,24 @@ export default function RisksPage() {
         </div>
 
         <div className="grid" style={{ gap: 12 }}>
+          <div className="card">
+            <div style={{ fontSize: 12, color: "var(--muted)", textTransform: "uppercase", marginBottom: 8 }}>
+              Temporal Alerts
+            </div>
+            <div style={{ marginBottom: 8 }}>New attack paths: {Number(temporal?.new_attack_paths_count || 0)}</div>
+            <div style={{ marginBottom: 8 }}>
+              Current snapshot: {temporal?.snapshot_timestamp || "n/a"}
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              Previous snapshot: {temporal?.previous_snapshot_timestamp || "n/a"}
+            </div>
+            {temporal?.is_first_snapshot && (
+              <div style={{ color: "var(--muted)", fontSize: 12 }}>
+                Baseline snapshot created. Run again to detect temporal drift.
+              </div>
+            )}
+          </div>
+
           <div className="card">
             <div style={{ fontSize: 12, color: "var(--muted)", textTransform: "uppercase", marginBottom: 8 }}>Summary</div>
             <div style={{ marginBottom: 8 }}>Attack paths found: {report.summary?.attack_paths_found || 0}</div>

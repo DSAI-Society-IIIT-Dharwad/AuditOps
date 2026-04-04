@@ -83,4 +83,4 @@ spec:
   # Expected Behavior: Without a colon/version, the API keyword search would fail. 
   # Your script should catch this, skip the API, and return 0.0.
   - name: memory-cache
-    image: redis
+    image: redis  

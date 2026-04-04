@@ -13,4 +13,5 @@ class GraphAnalysisResponse(BaseModel):
     nodes: list[dict[str, Any]]
     edges: list[dict[str, Any]]
     analysis: dict[str, Any]
+    temporal: dict[str, Any] = Field(default_factory=dict)
     report: dict[str, Any] = Field(default_factory=dict)

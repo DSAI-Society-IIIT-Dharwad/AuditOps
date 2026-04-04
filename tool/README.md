@@ -133,6 +133,9 @@ curl "http://localhost:8000/api/v1/graph-analysis?namespace=vulnerable-ns&includ
 curl "http://localhost:8000/api/v1/graph-analysis?namespace=vulnerable-ns&include_cluster_rbac=true&enable_nvd_scoring=true"
 ```
 
+The response now also includes a top-level `temporal` object and `report.temporal`
+with consecutive-scan diff results and new attack-path alerts.
+
 Common namespace checks:
 
 - `namespace=vulnerable-ns`
@@ -159,6 +162,60 @@ uv run python src/main.py --ingestor kubectl --namespace secure-ns --graph-out o
 uv run python src/main.py --ingestor kubectl --namespace vulnerable-ns --enable-nvd-scoring true --nvd-timeout 10
 ```
 
+### Algorithm Mode CLI (Rubric-Friendly)
+
+All core algorithms are directly invokable via named flags:
+
+```bash
+# Full report (default if no mode flag is set)
+uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --full-report
+
+# Dijkstra shortest attack path (set source/target explicitly)
+uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --source User:default:dev-1 --target Database:data:production-db
+
+# BFS blast radius only
+uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --blast-radius --source Pod:default:web-frontend --max-hops 3
+
+# DFS cycle detection only
+uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --cycles
+
+# Critical-node analysis only
+uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --critical-node --max-depth 8
+```
+
+Expected output snippets:
+
+- Attack-path mode: `⚠ Attack Path Detected` and `Hops: <n> | Risk: <score> (<severity>)`
+- Blast-radius mode: `Blast Radius: <count> node(s) within <hops> hop(s)`
+- Cycle mode: `Cycles: <count>`
+- Critical-node mode: `Critical Node: <node>` and path-disruption metrics
+
+### Temporal Snapshot Diff Alerts (Bonus 3)
+
+Temporal analysis is now automatic on every scan.
+
+- Each run saves a timestamped snapshot for the current scan scope.
+- Scope key includes namespace, RBAC mode, ingestor mode, and NVD toggle.
+- Current scan is diffed against the immediately previous snapshot in the same scope.
+- Alert is raised when a source can reach a sink now but could not in the previous snapshot.
+
+Default snapshot location:
+
+`tool/out/snapshots/<scope-id>/snapshot-<timestamp>.json`
+
+Optional custom snapshot directory:
+
+```bash
+uv run python src/main.py --ingestor kubectl --namespace vulnerable-ns --snapshot-dir out/custom-snapshots
+```
+
+Temporal output fields (CLI/API/report):
+
+- `is_first_snapshot` (baseline run, no previous diff)
+- `new_attack_paths_count`
+- `alerts[]` with source, target, hops, risk score
+- node/edge delta counters under `node_changes` and `edge_changes`
+
 ### Namespace RBAC modes
 
 Strict namespace mode (exclude all ClusterRoleBinding-derived nodes):
@@ -175,7 +232,7 @@ Hybrid mode (default when namespace is set):
 ### Mock ingestion
 
 ```bash
-uv run python src/main.py --ingestor mock --mock-file mock-cluster-graph.json --graph-out out/mock-graph.json --pdf-out out/mock-report.pdf
+uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --graph-out out/mock-graph.json --pdf-out out/mock-report.pdf
 ```
 
 ### Generate expected sample report output
@@ -183,7 +240,7 @@ uv run python src/main.py --ingestor mock --mock-file mock-cluster-graph.json --
 Run from this `tool/` directory:
 
 ```bash
-uv run python src/main.py --ingestor mock --mock-file mock-cluster-graph.json > actual-output.txt
+uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json > actual-output.txt
 ```
 
 Check parity against provided sample output:
@@ -203,11 +260,12 @@ uv run python src/main.py --graph-in out/vulnerable-graph.json --pdf-out out/rep
 | Flag | Default | Description |
 |---|---|---|
 | `--ingestor` | `kubectl` | Data source mode: `kubectl` or `mock`. |
-| `--mock-file` | `mock-cluster-graph.json` | Mock JSON path when `--ingestor mock`. |
+| `--mock-file` | `mock-cluster-graph.json` | Mock JSON path when `--ingestor mock`. In this repo from `tool/`, use `../tests/mock-cluster-graph.json`. |
 | `--graph-in` | `None` | Optional exported graph JSON input. Skips live/mock ingestion. |
 | `--graph-out` | `cluster-graph.json` | Output path for normalized graph JSON artifact. |
 | `--pdf-out` | `None` | Optional output path for PDF kill-chain report artifact. |
 | `--fallback-file` | `None` | Optional fallback JSON if kubectl ingestion fails. |
+| `--snapshot-dir` | `None` | Optional temporal snapshot root directory. Default: `tool/out/snapshots`. |
 | `--include-cluster-rbac` | `true` | Controls cluster RBAC expansion: `false` = strict namespace mode (exclude all ClusterRoleBindings), `true` = include cluster RBAC (hybrid-filtered when `--namespace` is set). |
 | `--enable-nvd-scoring` | `false` | Enables live NVD CVE scoring for Pod container image tags. |
 | `--nvd-api-key` | `None` | Optional NVD API key (falls back to `NVD_API_KEY` env var). |
@@ -217,6 +275,105 @@ uv run python src/main.py --graph-in out/vulnerable-graph.json --pdf-out out/rep
 | `--namespace` | `None` | Namespace scope for kubectl ingestion and source/sink auto-selection. |
 | `--max-hops` | `3` | BFS hop limit for blast-radius analysis. |
 | `--max-depth` | `8` | DFS depth bound for critical-node path counting on cyclic graphs. |
+| `--full-report` | `false` | Force full multi-section report rendering. Also default behavior when no mode flag is set. |
+| `--attack-path` | `false` | Render focused Dijkstra attack-path section. |
+| `--blast-radius` | `false` | Render focused BFS blast-radius section. |
+| `--cycles` | `false` | Render focused DFS cycle-detection section. |
+| `--critical-node` | `false` | Render focused critical-node analysis section. |
+
+## Rubric Crosswalk
+
+Use this section as a submission checklist that maps rubric items to concrete implementation evidence.
+
+| Rubric checkpoint | Implementation evidence | Verification command |
+|---|---|---|
+| Ingest from live cluster or mock input | `src/ingestion/kubectl_runner.py`, `src/ingestion/mock_parser.py` | `uv run python -m unittest test/test_kubectl_runner.py test/test_mock_parser.py -v` |
+| Build and replay normalized graph artifact | `src/graph/networkx_builder.py`, `src/main.py` (`--graph-out`, `--graph-in`) | `uv run python -m unittest test/test_networkx_builder.py test/test_main_export.py -v` |
+| BFS blast-radius analysis | `src/analysis/blast_radius.py`, CLI mode `--blast-radius` | `uv run python -m unittest test/test_blast_radius.py -v` |
+| Dijkstra shortest attack path | `src/analysis/shortest_path.py`, CLI mode `--attack-path` | `uv run python -m unittest test/test_shortest_path.py -v` |
+| DFS cycle detection | `src/analysis/cycle_detect.py`, CLI mode `--cycles` | `uv run python -m unittest test/test_cycle_detect.py -v` |
+| Critical-node disruption analysis | `src/analysis/critical_node.py`, CLI mode `--critical-node` | `uv run python -m unittest test/test_critical_node.py -v` |
+| Focused per-algorithm CLI rendering | `src/main.py` (`_selected_report_modes`, `_select_report_view`) | `uv run python -m unittest test/test_main_cli_modes.py -v` |
+| CLI and PDF reporting artifacts | `src/reporting/cli_formatter.py`, `src/reporting/pdf_generator.py` | `uv run python -m unittest test/test_cli_formatter.py test/test_pdf_generator.py -v` |
+| API contract for frontend | `src/api/routes/graph_analysis.py`, `src/services/contracts/graph_analysis_contract.py` | `uv run python -m unittest test/test_api/test_graph_analysis_api.py test/test_graph_analysis_contract.py -v` |
+| Optional live NVD enrichment for Pods | `src/services/cve/nvd_scorer.py`, `src/ingestion/kubectl_runner.py` | `uv run python -m unittest test/test_nvd_scorer.py test/test_kubectl_runner.py -v` |
+
+Mode command matrix (quick manual sanity):
+
+```bash
+uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --attack-path --source User:default:dev-1 --target Database:data:production-db
+uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --blast-radius --source Pod:default:web-frontend
+uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --cycles
+uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --critical-node
+```
+
+## Schema Reference
+
+The normalized graph artifact uses this top-level shape:
+
+```json
+{
+	"schema_version": "1.0.0",
+	"nodes": [ ... ],
+	"edges": [ ... ]
+}
+```
+
+Node fields:
+
+- `node_id` (`Type:Namespace:Name`) unique node identifier used by traversal logic.
+- `entity_type` resource/security type (`Pod`, `ServiceAccount`, `Role`, `ClusterRole`, `Secret`, `ConfigMap`, `User`, `Group`, etc.).
+- `name` resource name.
+- `namespace` namespace or `cluster` for cluster-scoped entities.
+- `risk_score` non-negative node risk signal used in visualization and optional path-cost modes.
+- `is_source` marks entry points used for source auto-selection.
+- `is_sink` marks crown-jewel targets used for sink auto-selection.
+- `nvd_enriched`, `nvd_source`, `nvd_max_cvss`, `nvd_cve_ids`, `nvd_image_refs` optional NVD enrichment metadata for Pod nodes.
+
+Edge fields:
+
+- `source_id`, `target_id` node references.
+- `relationship_type` directed relation (`uses`, `bound_to`, `can_read`, `grants`, etc.).
+- `weight` traversal cost contribution used by Dijkstra.
+- `cve`, `cvss` optional vulnerability annotation shown in reports.
+- `source_ref`, `target_ref`, `escalation_type` optional compatibility metadata.
+
+Weight semantics:
+
+- Base edge weights model privilege/trust traversal difficulty.
+- Higher weights indicate more severe or sensitive movement steps.
+- Additional penalties (wildcard RBAC, secret snooping) are applied during ingestion and become part of edge weights.
+
+Example node row:
+
+```json
+{
+	"node_id": "Pod:vulnerable-ns:frontend-webapp-vulnerable",
+	"entity_type": "Pod",
+	"name": "frontend-webapp-vulnerable",
+	"namespace": "vulnerable-ns",
+	"risk_score": 14.7,
+	"is_source": true,
+	"is_sink": false,
+	"nvd_enriched": true,
+	"nvd_source": "nvd",
+	"nvd_max_cvss": 7.7,
+	"nvd_cve_ids": ["CVE-2019-20372"]
+}
+```
+
+Example edge row:
+
+```json
+{
+	"source_id": "Pod:vulnerable-ns:frontend-webapp-vulnerable",
+	"target_id": "ServiceAccount:vulnerable-ns:overly-permissive-sa",
+	"relationship_type": "uses",
+	"weight": 2.0,
+	"cve": null,
+	"cvss": null
+}
+```
 
 ## Artifacts
 

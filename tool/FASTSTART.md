@@ -17,6 +17,9 @@ This is a copy-paste guide for the backend analyzer so you can run setup, featur
   - CLI kill-chain style report
   - Graph JSON export artifact
   - PDF report export
+- Temporal analysis:
+  - Auto-saved snapshots per scan scope
+  - Consecutive-scan diff and new attack-path alerts
 - API:
   - FastAPI endpoint for graph and risk data
 - Bonus 2 (opt-in):
@@ -71,7 +74,7 @@ uv run python src/main.py --ingestor kubectl --namespace vulnerable-ns --include
 ### C) Mock mode
 
 ```bash
-uv run python src/main.py --ingestor mock --mock-file mock-cluster-graph.json --graph-out out/mock-graph.json --pdf-out out/mock-report.pdf
+uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --graph-out out/mock-graph.json --pdf-out out/mock-report.pdf
 ```
 
 ### D) Replay from exported graph
@@ -79,6 +82,18 @@ uv run python src/main.py --ingestor mock --mock-file mock-cluster-graph.json --
 ```bash
 uv run python src/main.py --graph-in out/vulnerable-graph.json --pdf-out out/replay-report.pdf
 ```
+
+### E) Temporal diff with explicit snapshot directory
+
+```bash
+uv run python src/main.py --ingestor kubectl --namespace vulnerable-ns --snapshot-dir out/custom-snapshots
+```
+
+Notes:
+
+- First run in a scope creates a baseline snapshot.
+- Next run in the same scope compares against the previous snapshot.
+- Alert is emitted when a new source-to-sink path becomes reachable.
 
 ## 5) Bonus 2: Live CVE Scoring (NVD)
 

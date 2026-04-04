@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import UTC, datetime
+from collections.abc import Mapping
 from typing import Any
 
 from analysis.blast_radius import BlastRadiusResult
@@ -27,26 +28,40 @@ def build_summary(nodes: list[Node], edges: list[Edge]) -> dict[str, int]:
     }
 
 
-def build_nodes(nodes: list[Node]) -> list[dict[str, Any]]:
+def build_nodes(
+    nodes: list[Node],
+    *,
+    temporal_node_by_id: Mapping[str, Mapping[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    temporal_node_by_id = temporal_node_by_id or {}
     sorted_nodes = sorted(nodes, key=lambda node: node.node_id)
-    return [
-        {
-            "id": node.node_id,
-            "entity_type": node.entity_type,
-            "name": node.name,
-            "namespace": node.namespace,
-            "risk_score": node.risk_score,
-            "is_source": node.is_source,
-            "is_sink": node.is_sink,
-            "nvd_enriched": node.nvd_enriched,
-            "nvd_source": node.nvd_source,
-            "nvd_max_cvss": node.nvd_max_cvss,
-            "nvd_cve_ids": list(node.nvd_cve_ids),
-            "nvd_image_refs": list(node.nvd_image_refs),
-            "tags": _tags_for_node(node),
-        }
-        for node in sorted_nodes
-    ]
+    rows: list[dict[str, Any]] = []
+    for node in sorted_nodes:
+        temporal_row = temporal_node_by_id.get(node.node_id, {})
+        temporal_status = temporal_row.get("status")
+        risk_delta = temporal_row.get("risk_delta")
+
+        rows.append(
+            {
+                "id": node.node_id,
+                "entity_type": node.entity_type,
+                "name": node.name,
+                "namespace": node.namespace,
+                "risk_score": node.risk_score,
+                "is_source": node.is_source,
+                "is_sink": node.is_sink,
+                "nvd_enriched": node.nvd_enriched,
+                "nvd_source": node.nvd_source,
+                "nvd_max_cvss": node.nvd_max_cvss,
+                "nvd_cve_ids": list(node.nvd_cve_ids),
+                "nvd_image_refs": list(node.nvd_image_refs),
+                "temporal_status": temporal_status,
+                "risk_delta": risk_delta,
+                "tags": _tags_for_node(node, temporal_status=temporal_status),
+            }
+        )
+
+    return rows
 
 
 def build_edges(edges: list[Edge]) -> tuple[list[dict[str, Any]], dict[tuple[str, str], list[str]]]:
@@ -153,7 +168,7 @@ def _severity_for_score(score: float) -> str:
     return "LOW"
 
 
-def _tags_for_node(node: Node) -> list[str]:
+def _tags_for_node(node: Node, *, temporal_status: Any = None) -> list[str]:
     tags: list[str] = []
     if node.is_source:
         tags.append("public-entrypoint")
@@ -163,4 +178,6 @@ def _tags_for_node(node: Node) -> list[str]:
         tags.append("rbac-high-risk")
     if node.nvd_enriched:
         tags.append("nvd-enriched")
+    if temporal_status:
+        tags.append(f"temporal-{str(temporal_status)}")
     return tags

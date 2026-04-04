@@ -8,7 +8,12 @@
       "namespace": "cluster",
       "risk_score": 10.0,
       "is_source": false,
-      "is_sink": false
+      "is_sink": false,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "ClusterRole:cluster:cluster-viewer",
@@ -17,7 +22,12 @@
       "namespace": "cluster",
       "risk_score": 2.0,
       "is_source": false,
-      "is_sink": false
+      "is_sink": false,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "ClusterRole:cluster:deployer",
@@ -26,7 +36,12 @@
       "namespace": "cluster",
       "risk_score": 7.5,
       "is_source": false,
-      "is_sink": false
+      "is_sink": false,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "ConfigMap:default:app-env-config",
@@ -35,7 +50,12 @@
       "namespace": "default",
       "risk_score": 3.0,
       "is_source": false,
-      "is_sink": false
+      "is_sink": false,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "ConfigMap:default:db-url-config",
@@ -44,7 +64,12 @@
       "namespace": "default",
       "risk_score": 5.5,
       "is_source": false,
-      "is_sink": false
+      "is_sink": false,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "Database:data:analytics-db",
@@ -53,7 +78,12 @@
       "namespace": "data",
       "risk_score": 7.0,
       "is_source": false,
-      "is_sink": true
+      "is_sink": true,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "Database:data:production-db",
@@ -62,7 +92,12 @@
       "namespace": "data",
       "risk_score": 10.0,
       "is_source": false,
-      "is_sink": true
+      "is_sink": true,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "ExternalActor:external:internet",
@@ -71,7 +106,12 @@
       "namespace": "external",
       "risk_score": 10.0,
       "is_source": true,
-      "is_sink": false
+      "is_sink": false,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "Namespace:cluster:default",
@@ -80,7 +120,12 @@
       "namespace": "cluster",
       "risk_score": 4.0,
       "is_source": false,
-      "is_sink": false
+      "is_sink": false,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "Namespace:cluster:kube-system",
@@ -89,7 +134,12 @@
       "namespace": "cluster",
       "risk_score": 9.0,
       "is_source": false,
-      "is_sink": true
+      "is_sink": true,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "Node:cluster:worker-node-1",
@@ -98,7 +148,12 @@
       "namespace": "cluster",
       "risk_score": 9.0,
       "is_source": false,
-      "is_sink": true
+      "is_sink": true,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "Node:cluster:worker-node-2",
@@ -107,7 +162,12 @@
       "namespace": "cluster",
       "risk_score": 9.0,
       "is_source": false,
-      "is_sink": false
+      "is_sink": false,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "PersistentVolume:data:data-pvc",
@@ -116,7 +176,12 @@
       "namespace": "data",
       "risk_score": 7.0,
       "is_source": false,
-      "is_sink": true
+      "is_sink": true,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "Pod:default:api-server",
@@ -125,7 +190,12 @@
       "namespace": "default",
       "risk_score": 6.0,
       "is_source": false,
-      "is_sink": false
+      "is_sink": false,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "Pod:default:background-worker",
@@ -134,7 +204,12 @@
       "namespace": "default",
       "risk_score": 4.0,
       "is_source": false,
-      "is_sink": false
+      "is_sink": false,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "Pod:default:sidecar-proxy",
@@ -143,7 +218,12 @@
       "namespace": "default",
       "risk_score": 5.0,
       "is_source": false,
-      "is_sink": false
+      "is_sink": false,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "Pod:default:web-frontend",
@@ -152,7 +232,12 @@
       "namespace": "default",
       "risk_score": 7.5,
       "is_source": false,
-      "is_sink": false
+      "is_sink": false,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "Pod:kube-system:admission-webhook",
@@ -161,7 +246,12 @@
       "namespace": "kube-system",
       "risk_score": 8.5,
       "is_source": false,
-      "is_sink": false
+      "is_sink": false,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "Pod:logging:log-aggregator",
@@ -170,7 +260,12 @@
       "namespace": "logging",
       "risk_score": 4.0,
       "is_source": false,
-      "is_sink": false
+      "is_sink": false,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "Pod:monitoring:metrics-collector",
@@ -179,7 +274,12 @@
       "namespace": "monitoring",
       "risk_score": 3.5,
       "is_source": false,
-      "is_sink": false
+      "is_sink": false,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "Role:default:node-reader",
@@ -188,7 +288,12 @@
       "namespace": "default",
       "risk_score": 4.0,
       "is_source": false,
-      "is_sink": false
+      "is_sink": false,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "Role:default:pod-exec",
@@ -197,7 +302,12 @@
       "namespace": "default",
       "risk_score": 8.5,
       "is_source": false,
-      "is_sink": false
+      "is_sink": false,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "Role:default:secret-reader",
@@ -206,7 +316,12 @@
       "namespace": "default",
       "risk_score": 7.0,
       "is_source": false,
-      "is_sink": false
+      "is_sink": false,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "Secret:ci:cicd-deploy-token",
@@ -215,7 +330,12 @@
       "namespace": "ci",
       "risk_score": 8.5,
       "is_source": false,
-      "is_sink": false
+      "is_sink": false,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "Secret:default:api-key",
@@ -224,7 +344,12 @@
       "namespace": "default",
       "risk_score": 8.0,
       "is_source": false,
-      "is_sink": false
+      "is_sink": false,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "Secret:default:db-credentials",
@@ -233,7 +358,12 @@
       "namespace": "default",
       "risk_score": 9.5,
       "is_source": false,
-      "is_sink": false
+      "is_sink": false,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "Secret:default:tls-cert",
@@ -242,7 +372,12 @@
       "namespace": "default",
       "risk_score": 6.0,
       "is_source": false,
-      "is_sink": false
+      "is_sink": false,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "Secret:kube-system:admin-token",
@@ -251,7 +386,12 @@
       "namespace": "kube-system",
       "risk_score": 10.0,
       "is_source": false,
-      "is_sink": false
+      "is_sink": false,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "Service:default:internal-api-svc",
@@ -260,7 +400,12 @@
       "namespace": "default",
       "risk_score": 5.0,
       "is_source": false,
-      "is_sink": false
+      "is_sink": false,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "Service:default:loadbalancer-svc",
@@ -269,7 +414,12 @@
       "namespace": "default",
       "risk_score": 6.5,
       "is_source": true,
-      "is_sink": false
+      "is_sink": false,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "Service:default:service-a",
@@ -278,7 +428,12 @@
       "namespace": "default",
       "risk_score": 5.0,
       "is_source": false,
-      "is_sink": false
+      "is_sink": false,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "Service:default:service-b",
@@ -287,7 +442,12 @@
       "namespace": "default",
       "risk_score": 5.0,
       "is_source": false,
-      "is_sink": false
+      "is_sink": false,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "ServiceAccount:ci:sa-cicd",
@@ -296,7 +456,12 @@
       "namespace": "ci",
       "risk_score": 8.0,
       "is_source": false,
-      "is_sink": false
+      "is_sink": false,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "ServiceAccount:default:default",
@@ -305,7 +470,12 @@
       "namespace": "default",
       "risk_score": 6.0,
       "is_source": false,
-      "is_sink": false
+      "is_sink": false,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "ServiceAccount:default:sa-webapp",
@@ -314,7 +484,12 @@
       "namespace": "default",
       "risk_score": 5.5,
       "is_source": false,
-      "is_sink": false
+      "is_sink": false,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "ServiceAccount:default:sa-worker",
@@ -323,7 +498,12 @@
       "namespace": "default",
       "risk_score": 4.5,
       "is_source": false,
-      "is_sink": false
+      "is_sink": false,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "ServiceAccount:logging:sa-logger",
@@ -332,7 +512,12 @@
       "namespace": "logging",
       "risk_score": 4.0,
       "is_source": false,
-      "is_sink": false
+      "is_sink": false,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "ServiceAccount:monitoring:sa-monitor",
@@ -341,7 +526,12 @@
       "namespace": "monitoring",
       "risk_score": 3.0,
       "is_source": false,
-      "is_sink": false
+      "is_sink": false,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "User:ci:cicd-bot",
@@ -350,7 +540,12 @@
       "namespace": "ci",
       "risk_score": 6.0,
       "is_source": true,
-      "is_sink": false
+      "is_sink": false,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "User:default:dev-1",
@@ -359,7 +554,12 @@
       "namespace": "default",
       "risk_score": 5.0,
       "is_source": true,
-      "is_sink": false
+      "is_sink": false,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     },
     {
       "node_id": "User:default:dev-2",
@@ -368,7 +568,12 @@
       "namespace": "default",
       "risk_score": 5.0,
       "is_source": true,
-      "is_sink": false
+      "is_sink": false,
+      "nvd_enriched": false,
+      "nvd_source": null,
+      "nvd_max_cvss": null,
+      "nvd_cve_ids": [],
+      "nvd_image_refs": []
     }
   ],
   "edges": [
@@ -376,395 +581,289 @@
       "source_id": "ClusterRole:cluster:cluster-admin",
       "target_id": "Namespace:cluster:default",
       "relationship_type": "admin-over",
-      "weight": 6.0,
-      "source_ref": "clusterrole-admin",
-      "target_ref": "ns-default"
+      "weight": 6.0
     },
     {
       "source_id": "ClusterRole:cluster:cluster-admin",
       "target_id": "Secret:kube-system:admin-token",
       "relationship_type": "can-read",
-      "weight": 5.0,
-      "source_ref": "clusterrole-admin",
-      "target_ref": "secret-admin-token"
+      "weight": 5.0
     },
     {
       "source_id": "ClusterRole:cluster:cluster-viewer",
       "target_id": "ConfigMap:default:app-env-config",
       "relationship_type": "can-read",
-      "weight": 1.0,
-      "source_ref": "clusterrole-view",
-      "target_ref": "configmap-env"
+      "weight": 1.0
     },
     {
       "source_id": "ClusterRole:cluster:deployer",
       "target_id": "Secret:ci:cicd-deploy-token",
       "relationship_type": "can-read",
-      "weight": 4.5,
-      "source_ref": "clusterrole-deploy",
-      "target_ref": "secret-cicd-token"
+      "weight": 4.5
     },
     {
       "source_id": "ConfigMap:default:db-url-config",
       "target_id": "Database:data:analytics-db",
       "relationship_type": "exposes-endpoint",
-      "weight": 4.0,
-      "source_ref": "configmap-dburl",
-      "target_ref": "db-analytics"
+      "weight": 4.0
     },
     {
       "source_id": "ExternalActor:external:internet",
       "target_id": "Pod:default:web-frontend",
       "relationship_type": "reaches",
-      "weight": 4.0,
-      "source_ref": "internet",
-      "target_ref": "pod-webfront",
-      "cve": "CVE-2024-1234",
-      "cvss": 8.1
+      "weight": 4.0
     },
     {
       "source_id": "ExternalActor:external:internet",
       "target_id": "Service:default:loadbalancer-svc",
       "relationship_type": "reaches",
-      "weight": 2.0,
-      "source_ref": "internet",
-      "target_ref": "lb-service"
+      "weight": 2.0
     },
     {
       "source_id": "Node:cluster:worker-node-1",
       "target_id": "PersistentVolume:data:data-pvc",
       "relationship_type": "mounts",
-      "weight": 5.0,
-      "source_ref": "node-worker-1",
-      "target_ref": "pvc-data"
+      "weight": 5.0
     },
     {
       "source_id": "Node:cluster:worker-node-2",
       "target_id": "Namespace:cluster:default",
       "relationship_type": "hosts",
-      "weight": 1.0,
-      "source_ref": "node-worker-2",
-      "target_ref": "ns-default"
+      "weight": 1.0
     },
     {
       "source_id": "Pod:default:api-server",
       "target_id": "ConfigMap:default:db-url-config",
       "relationship_type": "reads",
-      "weight": 2.5,
-      "source_ref": "pod-api",
-      "target_ref": "configmap-dburl"
+      "weight": 2.5
     },
     {
       "source_id": "Pod:default:api-server",
       "target_id": "Secret:default:api-key",
       "relationship_type": "mounts",
-      "weight": 3.0,
-      "source_ref": "pod-api",
-      "target_ref": "secret-api-key"
+      "weight": 3.0
     },
     {
       "source_id": "Pod:default:api-server",
       "target_id": "ServiceAccount:default:sa-worker",
       "relationship_type": "uses",
-      "weight": 3.5,
-      "source_ref": "pod-api",
-      "target_ref": "sa-worker",
-      "cve": "CVE-2023-4567",
-      "cvss": 7.2
+      "weight": 3.5
     },
     {
       "source_id": "Pod:default:background-worker",
       "target_id": "ServiceAccount:default:sa-worker",
       "relationship_type": "uses",
-      "weight": 2.0,
-      "source_ref": "pod-worker",
-      "target_ref": "sa-worker"
+      "weight": 2.0
     },
     {
       "source_id": "Pod:default:sidecar-proxy",
       "target_id": "ServiceAccount:default:sa-webapp",
       "relationship_type": "uses",
-      "weight": 2.5,
-      "source_ref": "pod-sidecar",
-      "target_ref": "sa-webapp"
+      "weight": 2.5
     },
     {
       "source_id": "Pod:default:web-frontend",
       "target_id": "Service:default:internal-api-svc",
       "relationship_type": "calls",
-      "weight": 2.0,
-      "source_ref": "pod-webfront",
-      "target_ref": "svc-internal-api"
+      "weight": 2.0
     },
     {
       "source_id": "Pod:default:web-frontend",
       "target_id": "ServiceAccount:default:default",
       "relationship_type": "falls-back-to",
-      "weight": 6.0,
-      "source_ref": "pod-webfront",
-      "target_ref": "sa-default"
+      "weight": 6.0
     },
     {
       "source_id": "Pod:default:web-frontend",
       "target_id": "ServiceAccount:default:sa-webapp",
       "relationship_type": "uses",
-      "weight": 3.0,
-      "source_ref": "pod-webfront",
-      "target_ref": "sa-webapp"
+      "weight": 3.0
     },
     {
       "source_id": "Pod:kube-system:admission-webhook",
       "target_id": "Namespace:cluster:kube-system",
       "relationship_type": "deployed-in",
-      "weight": 3.0,
-      "source_ref": "pod-admission",
-      "target_ref": "ns-kube-system"
+      "weight": 3.0
     },
     {
       "source_id": "Pod:logging:log-aggregator",
       "target_id": "ConfigMap:default:app-env-config",
       "relationship_type": "reads",
-      "weight": 1.5,
-      "source_ref": "pod-logger",
-      "target_ref": "configmap-env"
+      "weight": 1.5
     },
     {
       "source_id": "Pod:logging:log-aggregator",
       "target_id": "ServiceAccount:logging:sa-logger",
       "relationship_type": "uses",
-      "weight": 3.0,
-      "source_ref": "pod-logger",
-      "target_ref": "sa-logger"
+      "weight": 3.0
     },
     {
       "source_id": "Pod:monitoring:metrics-collector",
       "target_id": "ServiceAccount:monitoring:sa-monitor",
       "relationship_type": "uses",
-      "weight": 2.0,
-      "source_ref": "pod-metrics",
-      "target_ref": "sa-monitor"
+      "weight": 2.0
     },
     {
       "source_id": "Role:default:node-reader",
       "target_id": "Node:cluster:worker-node-1",
       "relationship_type": "can-read",
-      "weight": 4.5,
-      "source_ref": "role-node-reader",
-      "target_ref": "node-worker-1"
+      "weight": 4.5
     },
     {
       "source_id": "Role:default:pod-exec",
       "target_id": "Node:cluster:worker-node-1",
       "relationship_type": "can-exec-on",
-      "weight": 7.0,
-      "source_ref": "role-pod-exec",
-      "target_ref": "node-worker-1",
-      "cve": "CVE-2024-3116",
-      "cvss": 9.0
+      "weight": 7.0
     },
     {
       "source_id": "Role:default:pod-exec",
       "target_id": "Node:cluster:worker-node-2",
       "relationship_type": "can-exec-on",
-      "weight": 7.0,
-      "source_ref": "role-pod-exec",
-      "target_ref": "node-worker-2"
+      "weight": 7.0
     },
     {
       "source_id": "Role:default:secret-reader",
       "target_id": "Secret:default:db-credentials",
       "relationship_type": "can-read",
-      "weight": 5.5,
-      "source_ref": "role-secret-reader",
-      "target_ref": "secret-db-creds"
+      "weight": 5.5
     },
     {
       "source_id": "Secret:ci:cicd-deploy-token",
       "target_id": "Database:data:production-db",
       "relationship_type": "grants-access-to",
-      "weight": 7.0,
-      "source_ref": "secret-cicd-token",
-      "target_ref": "db-production"
+      "weight": 7.0
     },
     {
       "source_id": "Secret:default:api-key",
       "target_id": "Database:data:analytics-db",
       "relationship_type": "grants-access-to",
-      "weight": 5.0,
-      "source_ref": "secret-api-key",
-      "target_ref": "db-analytics"
+      "weight": 5.0
     },
     {
       "source_id": "Secret:default:db-credentials",
       "target_id": "Database:data:production-db",
       "relationship_type": "grants-access-to",
-      "weight": 6.6,
-      "source_ref": "secret-db-creds",
-      "target_ref": "db-production"
+      "weight": 6.6
     },
     {
       "source_id": "Secret:kube-system:admin-token",
       "target_id": "Namespace:cluster:kube-system",
       "relationship_type": "grants-access-to",
-      "weight": 9.0,
-      "source_ref": "secret-admin-token",
-      "target_ref": "ns-kube-system"
+      "weight": 9.0
     },
     {
       "source_id": "Service:default:internal-api-svc",
       "target_id": "Pod:default:api-server",
       "relationship_type": "routes-to",
-      "weight": 2.0,
-      "source_ref": "svc-internal-api",
-      "target_ref": "pod-api"
+      "weight": 2.0
     },
     {
       "source_id": "Service:default:loadbalancer-svc",
       "target_id": "Pod:default:api-server",
       "relationship_type": "routes-to",
-      "weight": 3.0,
-      "source_ref": "lb-service",
-      "target_ref": "pod-api"
+      "weight": 3.0
     },
     {
       "source_id": "Service:default:loadbalancer-svc",
       "target_id": "Pod:default:web-frontend",
       "relationship_type": "routes-to",
-      "weight": 3.0,
-      "source_ref": "lb-service",
-      "target_ref": "pod-webfront"
+      "weight": 3.0
     },
     {
       "source_id": "Service:default:service-a",
       "target_id": "Service:default:service-b",
       "relationship_type": "admin-grant",
-      "weight": 5.0,
-      "source_ref": "svc-service-a",
-      "target_ref": "svc-service-b"
+      "weight": 5.0
     },
     {
       "source_id": "Service:default:service-b",
       "target_id": "Service:default:service-a",
       "relationship_type": "admin-grant",
-      "weight": 5.0,
-      "source_ref": "svc-service-b",
-      "target_ref": "svc-service-a"
+      "weight": 5.0
     },
     {
       "source_id": "ServiceAccount:ci:sa-cicd",
       "target_id": "ClusterRole:cluster:deployer",
       "relationship_type": "bound-to",
-      "weight": 5.0,
-      "source_ref": "sa-cicd",
-      "target_ref": "clusterrole-deploy"
+      "weight": 5.0
     },
     {
       "source_id": "ServiceAccount:ci:sa-cicd",
       "target_id": "Secret:ci:cicd-deploy-token",
       "relationship_type": "can-read",
-      "weight": 3.0,
-      "source_ref": "sa-cicd",
-      "target_ref": "secret-cicd-token"
+      "weight": 3.0
     },
     {
       "source_id": "ServiceAccount:default:default",
       "target_id": "ClusterRole:cluster:cluster-admin",
       "relationship_type": "bound-to",
-      "weight": 8.0,
-      "source_ref": "sa-default",
-      "target_ref": "clusterrole-admin"
+      "weight": 8.0
     },
     {
       "source_id": "ServiceAccount:default:default",
       "target_id": "Secret:default:db-credentials",
       "relationship_type": "can-read",
-      "weight": 7.0,
-      "source_ref": "sa-default",
-      "target_ref": "secret-db-creds"
+      "weight": 7.0
     },
     {
       "source_id": "ServiceAccount:default:sa-webapp",
       "target_id": "Role:default:secret-reader",
       "relationship_type": "bound-to",
-      "weight": 4.0,
-      "source_ref": "sa-webapp",
-      "target_ref": "role-secret-reader"
+      "weight": 4.0
     },
     {
       "source_id": "ServiceAccount:default:sa-webapp",
       "target_id": "Secret:default:api-key",
       "relationship_type": "can-read",
-      "weight": 4.0,
-      "source_ref": "sa-webapp",
-      "target_ref": "secret-api-key"
+      "weight": 4.0
     },
     {
       "source_id": "ServiceAccount:default:sa-webapp",
       "target_id": "Secret:default:tls-cert",
       "relationship_type": "can-read",
-      "weight": 2.0,
-      "source_ref": "sa-webapp",
-      "target_ref": "secret-tls"
+      "weight": 2.0
     },
     {
       "source_id": "ServiceAccount:default:sa-worker",
       "target_id": "Role:default:pod-exec",
       "relationship_type": "bound-to",
-      "weight": 5.0,
-      "source_ref": "sa-worker",
-      "target_ref": "role-pod-exec"
+      "weight": 5.0
     },
     {
       "source_id": "ServiceAccount:logging:sa-logger",
       "target_id": "Role:default:node-reader",
       "relationship_type": "bound-to",
-      "weight": 3.5,
-      "source_ref": "sa-logger",
-      "target_ref": "role-node-reader"
+      "weight": 3.5
     },
     {
       "source_id": "ServiceAccount:monitoring:sa-monitor",
       "target_id": "ClusterRole:cluster:cluster-viewer",
       "relationship_type": "bound-to",
-      "weight": 1.5,
-      "source_ref": "sa-monitor",
-      "target_ref": "clusterrole-view"
+      "weight": 1.5
     },
     {
       "source_id": "User:ci:cicd-bot",
       "target_id": "ServiceAccount:ci:sa-cicd",
       "relationship_type": "impersonates",
-      "weight": 4.0,
-      "source_ref": "user-cicd",
-      "target_ref": "sa-cicd"
+      "weight": 4.0
     },
     {
       "source_id": "User:default:dev-1",
       "target_id": "Pod:default:background-worker",
       "relationship_type": "can-exec",
-      "weight": 3.0,
-      "source_ref": "user-dev1",
-      "target_ref": "pod-worker"
+      "weight": 3.0
     },
     {
       "source_id": "User:default:dev-1",
       "target_id": "Pod:default:web-frontend",
       "relationship_type": "can-exec",
-      "weight": 5.0,
-      "source_ref": "user-dev1",
-      "target_ref": "pod-webfront",
-      "cve": "CVE-2024-1234",
-      "cvss": 8.1
+      "weight": 5.0
     },
     {
       "source_id": "User:default:dev-2",
       "target_id": "Pod:logging:log-aggregator",
       "relationship_type": "can-exec",
-      "weight": 4.0,
-      "source_ref": "user-dev2",
-      "target_ref": "pod-logger",
-      "cve": "CVE-2024-9999",
-      "cvss": 6.5
+      "weight": 4.0
     }
   ]
 }

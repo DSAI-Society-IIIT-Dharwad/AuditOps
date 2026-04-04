@@ -103,6 +103,23 @@ class TestCliFormatter(unittest.TestCase):
 				"blast_nodes_exposed": 2,
 				"critical_node": "Pod:default:web",
 			},
+			"temporal": {
+				"is_first_snapshot": False,
+				"snapshot_timestamp": "20260405T120000000000Z",
+				"previous_snapshot_timestamp": "20260405T110000000000Z",
+				"new_attack_paths_count": 1,
+				"connectivity": {
+					"new_attack_paths_count": 1,
+					"new_attack_paths": [
+						{
+							"source": "User:default:dev-1",
+							"target": "Secret:default:db",
+							"hops": 2,
+							"risk_score": 11.5,
+						}
+					],
+				},
+			},
 		}
 
 		text = CliFormatter().format_report(report)
@@ -110,6 +127,8 @@ class TestCliFormatter(unittest.TestCase):
 		self.assertIn("Path #1", text)
 		self.assertIn("[ SECTION 2 — BLAST RADIUS ANALYSIS (BFS, depth=3) ]", text)
 		self.assertIn("[ SECTION 4 — CRITICAL NODE ANALYSIS ]", text)
+		self.assertIn("[ SECTION 5 — TEMPORAL DIFF ALERTS ]", text)
+		self.assertIn("New attack path(s) detected since previous scan", text)
 		self.assertIn("SUMMARY", text)
 
 

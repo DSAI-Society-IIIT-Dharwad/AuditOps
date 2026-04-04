@@ -6,6 +6,9 @@ function formatRisk(value) {
 
 export default function ReportPanel({ payload, selectedNodeId }) {
   const report = payload?.report || {};
+  const temporal = payload?.temporal || report?.temporal || {};
+  const temporalConnectivity = temporal?.connectivity || {};
+  const temporalAlerts = Array.isArray(temporal?.alerts) ? temporal.alerts : [];
   const metadata = report.metadata || {};
   const attackPaths = Array.isArray(report.attack_paths) ? report.attack_paths : [];
   const blastRows = Array.isArray(report.blast_radius_by_source) ? report.blast_radius_by_source : [];
@@ -185,6 +188,49 @@ export default function ReportPanel({ payload, selectedNodeId }) {
             </div>
           ))}
         </div>
+      </section>
+
+      <section className="section-block">
+        <h3>Section 5 - Temporal Diff Alerts</h3>
+        <div className="section-meta">
+          New attack paths since previous scan: {Number(temporal?.new_attack_paths_count || 0)}
+        </div>
+        {temporal?.is_first_snapshot && (
+          <div className="empty-state">Baseline snapshot created. Run another scan to compare temporal changes.</div>
+        )}
+        {!temporal?.is_first_snapshot && (
+          <>
+            <div style={{ marginBottom: 8, color: "var(--muted)", fontSize: 12 }}>
+              Current snapshot: {temporal?.snapshot_timestamp || "n/a"}
+            </div>
+            <div style={{ marginBottom: 10, color: "var(--muted)", fontSize: 12 }}>
+              Previous snapshot: {temporal?.previous_snapshot_timestamp || "n/a"}
+            </div>
+            {Number(temporalAlerts.length) === 0 && (
+              <div className="empty-state">No temporal alerts were triggered in this scan window.</div>
+            )}
+            {temporalAlerts.map((alert, index) => (
+              <div className="recommendation-block" key={`${alert?.source || "unknown"}-${alert?.target || "unknown"}-${index}`}>
+                {alert?.title || "New attack path detected"}: {nodeDisplayName(alert?.source || "unknown")} -&gt; {nodeDisplayName(alert?.target || "unknown")}
+              </div>
+            ))}
+            {Array.isArray(temporalConnectivity?.new_attack_paths) && temporalConnectivity.new_attack_paths.length > 0 && (
+              <div className="critical-list" style={{ marginTop: 8 }}>
+                {temporalConnectivity.new_attack_paths.slice(0, 8).map((path, index) => (
+                  <div className="critical-row" key={`${path.source}-${path.target}-${index}`}>
+                    <div className="critical-row-head">
+                      <span>{nodeDisplayName(path.source)} -&gt; {nodeDisplayName(path.target)}</span>
+                      <span>{Number(path.risk_score || 0).toFixed(1)}</span>
+                    </div>
+                    <div style={{ color: "var(--muted)", fontSize: 11 }}>
+                      Hops: {path.hops || 0}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
       </section>
 
       <section className="section-block summary-block">

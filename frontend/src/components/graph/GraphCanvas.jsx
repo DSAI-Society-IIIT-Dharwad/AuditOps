@@ -103,6 +103,11 @@ export default function GraphCanvas({
     }
 
     const criticalNodeId = payload.report?.critical_nodes?.[0]?.node_id || payload.analysis?.critical_node?.node_id;
+    const temporalAlertPathNodes = new Set(
+      (payload?.temporal?.connectivity?.new_attack_paths || []).flatMap((path) =>
+        Array.isArray(path?.path) ? path.path : [],
+      ),
+    );
 
     const degreeByNode = new Map();
     for (const edge of payload.edges || []) {
@@ -132,6 +137,7 @@ export default function GraphCanvas({
           inAttackPath: showAttackPath && attackNodeIds.has(node.id),
           inBlastRadius: showBlastRadius && blastNodeIds.has(node.id),
           isCritical: showCriticalNode && criticalNodeId && criticalNodeId === node.id,
+          inTemporalAlert: temporalAlertPathNodes.has(node.id),
         },
       })),
       ...(payload.edges || []).map((edge) => ({
@@ -249,6 +255,15 @@ export default function GraphCanvas({
               "shadow-color": "#ff4f67",
               "shadow-opacity": 0.55,
               "shadow-blur": 28,
+            },
+          },
+          {
+            selector: "node[inTemporalAlert]",
+            style: {
+              "border-color": "#ffe28e",
+              "border-width": 3.5,
+              "overlay-color": "#ffe28e",
+              "overlay-opacity": 0.15,
             },
           },
           {

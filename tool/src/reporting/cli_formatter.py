@@ -44,6 +44,10 @@ class CliFormatter:
 		if critical_node:
 			lines.extend(self._format_critical_node(critical_node))
 
+		temporal = self._as_mapping(report.get("temporal"))
+		if temporal:
+			lines.extend(self._format_temporal(temporal))
+
 		recommendations = report.get("recommendations")
 		if recommendations is not None:
 			lines.extend(self._format_recommendations(recommendations))
@@ -163,6 +167,11 @@ class CliFormatter:
 				bar = "█" * bar_len
 				lines.append(f"    {node_name:30} ({node_type:15})  -{removed:2d} paths  {bar}")
 
+		temporal = self._as_mapping(report.get("temporal"))
+		if temporal:
+			lines.append("")
+			lines.extend(self._format_temporal(temporal, section_title="[ SECTION 5 — TEMPORAL DIFF ALERTS ]"))
+
 		summary = self._as_mapping(report.get("summary"))
 		if summary:
 			lines.extend(
@@ -244,6 +253,52 @@ class CliFormatter:
 			f"Critical Node: {self._node_label(node_id)}",
 			f"Path Disruption: before={total_before} after={total_after} removed={removed}",
 		]
+
+	def _format_temporal(self, temporal: Mapping[str, Any], section_title: str | None = None) -> list[str]:
+		connectivity = self._as_mapping(temporal.get("connectivity"))
+		new_paths = [self._as_mapping(item) for item in self._as_sequence(connectivity.get("new_attack_paths"))]
+		alerts = [self._as_mapping(item) for item in self._as_sequence(temporal.get("alerts"))]
+
+		new_count = self._as_int(
+			temporal.get("new_attack_paths_count"),
+			default=self._as_int(connectivity.get("new_attack_paths_count"), default=len(new_paths)),
+		)
+		is_first_snapshot = bool(temporal.get("is_first_snapshot"))
+		current_snapshot = str(temporal.get("snapshot_timestamp") or "n/a")
+		previous_snapshot = str(temporal.get("previous_snapshot_timestamp") or "n/a")
+
+		lines = [""]
+		if section_title:
+			lines.append(section_title)
+
+		if is_first_snapshot:
+			lines.append("  Baseline snapshot created. No previous snapshot available for diff.")
+			return lines
+
+		lines.append(f"  Snapshot: {current_snapshot}")
+		lines.append(f"  Previous: {previous_snapshot}")
+		if new_count > 0:
+			lines.append(f"  ⚠  New attack path(s) detected since previous scan: {new_count}")
+		else:
+			lines.append("  ✓  No new attack paths detected since previous scan")
+
+		for path in new_paths[:5]:
+			source = self._structured_node_name(path.get("source"))
+			target = self._structured_node_name(path.get("target"))
+			hops = self._as_int(path.get("hops"), default=0)
+			risk = self._as_float(path.get("risk_score"))
+			lines.append(f"    - {source} -> {target} | hops={hops} | risk={risk:.1f}")
+
+		if not new_paths:
+			for alert in alerts[:3]:
+				title = str(alert.get("title") or "Alert")
+				description = str(alert.get("description") or "")
+				if description:
+					lines.append(f"    - {title}: {description}")
+				else:
+					lines.append(f"    - {title}")
+
+		return lines
 
 	def _format_recommendations(self, recommendations: Any) -> list[str]:
 		items = self._as_sequence(recommendations)

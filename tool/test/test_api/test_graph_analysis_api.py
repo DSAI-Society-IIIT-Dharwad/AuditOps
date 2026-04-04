@@ -51,6 +51,11 @@ class TestGraphAnalysisApi(unittest.TestCase):
                 "critical_node": {},
                 "recommendations": [],
             },
+            "temporal": {
+                "enabled": True,
+                "is_first_snapshot": True,
+                "new_attack_paths_count": 0,
+            },
         }
 
         response = self.client.get("/api/v1/graph-analysis?namespace=demo")
@@ -59,6 +64,7 @@ class TestGraphAnalysisApi(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["schema_version"], "1.0.0")
         self.assertIn("analysis", payload)
+        self.assertIn("temporal", payload)
         get_graph_analysis_mock.assert_called_once_with(
             namespace="demo",
             include_cluster_rbac=True,
