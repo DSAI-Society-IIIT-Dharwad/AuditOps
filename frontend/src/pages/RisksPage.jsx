@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 
-import RiskSummary from "../components/risk/RiskSummary";
 import { useAnalysis } from "../app/AnalysisProvider";
+import { nodeDisplayName } from "../lib/reportUtils";
 
 export default function RisksPage() {
   const {
@@ -9,13 +9,17 @@ export default function RisksPage() {
     setNamespace,
     includeClusterRbac,
     setIncludeClusterRbac,
+    enableNvdScoring,
+    setEnableNvdScoring,
     payload,
     loading,
     error,
     refreshAnalysis,
   } = useAnalysis();
 
-  const attackPath = useMemo(() => payload?.analysis?.attack_path || null, [payload]);
+  const report = useMemo(() => payload?.report || {}, [payload]);
+  const criticalNodes = report.critical_nodes || [];
+  const topPaths = (report.attack_paths || []).slice(-5).reverse();
 
   return (
     <section>
@@ -38,8 +42,16 @@ export default function RisksPage() {
           />{" "}
           Include cluster RBAC
         </label>
+        <label style={{ fontSize: 12, color: "var(--muted)" }}>
+          <input
+            type="checkbox"
+            checked={enableNvdScoring}
+            onChange={(event) => setEnableNvdScoring(event.target.checked)}
+          />{" "}
+          Enable live NVD scoring
+        </label>
         <button
-          onClick={() => refreshAnalysis({ namespace, includeClusterRbac })}
+          onClick={() => refreshAnalysis({ namespace, includeClusterRbac, enableNvdScoring })}
           disabled={loading || !namespace.trim()}
           style={{ marginLeft: "auto" }}
         >
@@ -56,34 +68,59 @@ export default function RisksPage() {
       )}
 
       <div className="grid grid-2">
-        <RiskSummary payload={payload} />
         <div className="grid" style={{ gap: 12 }}>
           <div className="card">
             <div style={{ fontSize: 12, color: "var(--muted)", textTransform: "uppercase", marginBottom: 8 }}>
-              Attack Path
+              Highest Risk Attack Paths
             </div>
-            {!attackPath || !attackPath.path_node_ids?.length ? (
-              <div style={{ color: "var(--muted)" }}>No source-to-sink path detected.</div>
-            ) : (
-              <>
-                <div style={{ marginBottom: 8, fontSize: 13 }}>{attackPath.path_node_ids.join(" -> ")}</div>
-                <div style={{ color: "var(--muted)", fontSize: 12 }}>
-                  Hops: {attackPath.hops} | Score: {attackPath.risk_score} | Severity: {attackPath.severity}
+            {topPaths.length === 0 && <div style={{ color: "var(--muted)" }}>No source-to-sink path detected.</div>}
+            {topPaths.map((path, index) => (
+              <div key={`${path.source}-${path.target}-${index}`} style={{ marginBottom: 10, fontSize: 13 }}>
+                <div>
+                  {nodeDisplayName(path.source)} -&gt; {nodeDisplayName(path.target)}
                 </div>
-              </>
-            )}
+                <div style={{ color: "var(--muted)", fontSize: 12 }}>
+                  Hops: {path.hops || 0} | Score: {Number(path.risk_score || 0).toFixed(1)} | Severity: {path.severity || "LOW"}
+                </div>
+              </div>
+            ))}
           </div>
 
           <div className="card">
             <div style={{ fontSize: 12, color: "var(--muted)", textTransform: "uppercase", marginBottom: 8 }}>
-              Blast Radius
+              Critical Node Ranking
             </div>
-            <div style={{ fontWeight: 700 }}>
-              {(payload?.analysis?.blast_radius?.reachable_node_ids || []).length} reachable nodes
+            {criticalNodes.length === 0 && <div style={{ color: "var(--muted)" }}>No ranking available.</div>}
+            {criticalNodes.map((row) => (
+              <div key={row.node_id} style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                <span>{nodeDisplayName(row.node_id)}</span>
+                <span style={{ color: "var(--danger)" }}>-{row.paths_removed || 0}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid" style={{ gap: 12 }}>
+          <div className="card">
+            <div style={{ fontSize: 12, color: "var(--muted)", textTransform: "uppercase", marginBottom: 8 }}>Summary</div>
+            <div style={{ marginBottom: 8 }}>Attack paths found: {report.summary?.attack_paths_found || 0}</div>
+            <div style={{ marginBottom: 8 }}>Circular permissions: {report.summary?.cycles_found || 0}</div>
+            <div style={{ marginBottom: 8 }}>Blast radius exposed: {report.summary?.blast_nodes_exposed || 0}</div>
+            <div>Critical node: {nodeDisplayName(report.summary?.critical_node || "none")}</div>
+          </div>
+
+          <div className="card">
+            <div style={{ fontSize: 12, color: "var(--muted)", textTransform: "uppercase", marginBottom: 8 }}>
+              Recommendations
             </div>
-            <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 6 }}>
-              Max hops: {payload?.analysis?.blast_radius?.max_hops ?? 0}
-            </div>
+            {(payload?.analysis?.recommendations || []).length === 0 && (
+              <div style={{ color: "var(--muted)" }}>No recommendations generated.</div>
+            )}
+            {(payload?.analysis?.recommendations || []).map((item) => (
+              <div key={item} style={{ marginBottom: 6 }}>
+                - {item}
+              </div>
+            ))}
           </div>
         </div>
       </div>

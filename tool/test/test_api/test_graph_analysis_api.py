@@ -62,6 +62,7 @@ class TestGraphAnalysisApi(unittest.TestCase):
         get_graph_analysis_mock.assert_called_once_with(
             namespace="demo",
             include_cluster_rbac=True,
+            enable_nvd_scoring=False,
             max_hops=3,
             max_depth=8,
         )

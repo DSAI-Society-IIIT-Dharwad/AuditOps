@@ -6,10 +6,13 @@ import json
 import subprocess
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from core.interfaces import DataIngestor
 from core.models import ClusterGraphData, Edge, Node
+
+if TYPE_CHECKING:
+	from services.cve.nvd_scorer import NVDCveScorer
 
 
 _RESOURCE_ORDER = (
@@ -52,6 +55,7 @@ def build_cluster_graph_data(
 	*,
 	namespace_scope: str | None = None,
 	include_cluster_rbac: bool = True,
+	cve_scorer: NVDCveScorer | None = None,
 ) -> ClusterGraphData:
 	"""Normalize Kubernetes resource payloads into Node and Edge objects."""
 	nodes_by_id: dict[str, Node] = {}
@@ -70,7 +74,7 @@ def build_cluster_graph_data(
 			"Pod",
 			pod_name,
 			namespace,
-			risk_score=_pod_risk_score(item),
+			risk_score=_pod_risk_score(item, cve_scorer=cve_scorer),
 			is_source=_is_public_entrypoint(item),
 		)
 		add_node(pod)
@@ -231,10 +235,12 @@ class KubectlDataIngestor(DataIngestor):
 		*,
 		namespace: str | None = None,
 		include_cluster_rbac: bool = True,
+		cve_scorer: NVDCveScorer | None = None,
 	) -> None:
 		self._fallback_file = Path(fallback_file) if fallback_file else None
 		self._namespace = namespace
 		self._include_cluster_rbac = include_cluster_rbac
+		self._cve_scorer = cve_scorer
 
 	def source_name(self) -> str:
 		return "kubectl"
@@ -251,6 +257,7 @@ class KubectlDataIngestor(DataIngestor):
 				payload,
 				namespace_scope=self._namespace,
 				include_cluster_rbac=self._include_cluster_rbac,
+				cve_scorer=self._cve_scorer,
 			)
 		except KubectlIngestError:
 			if self._fallback_file is None:
@@ -267,6 +274,7 @@ class KubectlDataIngestor(DataIngestor):
 				fallback_payload,
 				namespace_scope=self._namespace,
 				include_cluster_rbac=self._include_cluster_rbac,
+				cve_scorer=self._cve_scorer,
 			)
 
 	def _run_kubectl_get(self, resource: str) -> dict[str, Any]:
@@ -396,14 +404,39 @@ def _is_crown_jewel(resource: Mapping[str, Any]) -> bool:
 	return False
 
 
-def _pod_risk_score(pod: Mapping[str, Any]) -> float:
+def _pod_risk_score(pod: Mapping[str, Any], cve_scorer: NVDCveScorer | None = None) -> float:
 	base = _BASE_RISK_BY_KIND.get("Pod", 5.0)
+	annotation_bonus = _pod_annotation_risk_bonus(pod)
+	cve_bonus = 0.0
+	if cve_scorer is not None and annotation_bonus == 0.0:
+		cve_bonus = _pod_cve_lookup_risk_bonus(pod, cve_scorer)
 	return (
 		base
-		+ _pod_annotation_risk_bonus(pod)
+		+ annotation_bonus
+		+ cve_bonus
 		+ _pod_automount_token_risk_bonus(pod)
 		+ _pod_privileged_container_risk_bonus(pod)
 	)
+
+
+def _pod_cve_lookup_risk_bonus(pod: Mapping[str, Any], cve_scorer: NVDCveScorer) -> float:
+	spec = pod.get("spec", {})
+	if not isinstance(spec, Mapping):
+		return 0.0
+
+	max_cvss = 0.0
+	for container in _all_containers(spec):
+		image_ref = container.get("image")
+		if not image_ref:
+			continue
+		try:
+			result = cve_scorer.score_image(str(image_ref))
+		except Exception:
+			continue
+		if result.max_cvss > max_cvss:
+			max_cvss = float(result.max_cvss)
+
+	return max_cvss
 
 
 def _pod_annotation_risk_bonus(pod: Mapping[str, Any]) -> float:

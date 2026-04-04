@@ -9,9 +9,27 @@ export default function GraphCanvas({ payload, showAttackPath, showBlastRadius, 
       return undefined;
     }
 
-    const attackNodeIds = new Set(payload.analysis?.attack_path?.path_node_ids || []);
+    const reportAttackPaths = payload.report?.attack_paths || [];
+    const attackNodeIds = new Set(
+      reportAttackPaths.flatMap((path) => (Array.isArray(path.path) ? path.path : [])),
+    );
+    if (attackNodeIds.size === 0) {
+      for (const nodeId of payload.analysis?.attack_path?.path_node_ids || []) {
+        attackNodeIds.add(nodeId);
+      }
+    }
+
     const blastNodeIds = new Set(payload.analysis?.blast_radius?.reachable_node_ids || []);
-    const criticalNodeId = payload.analysis?.critical_node?.node_id;
+    for (const row of payload.report?.blast_radius_by_source || []) {
+      const hops = row?.hops || {};
+      for (const nodeIds of Object.values(hops)) {
+        for (const nodeId of nodeIds || []) {
+          blastNodeIds.add(nodeId);
+        }
+      }
+    }
+
+    const criticalNodeId = payload.report?.critical_nodes?.[0]?.node_id || payload.analysis?.critical_node?.node_id;
 
     const elements = [
       ...(payload.nodes || []).map((node) => ({

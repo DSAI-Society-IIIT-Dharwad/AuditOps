@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class GraphAnalysisResponse(BaseModel):
@@ -13,3 +13,4 @@ class GraphAnalysisResponse(BaseModel):
     nodes: list[dict[str, Any]]
     edges: list[dict[str, Any]]
     analysis: dict[str, Any]
+    report: dict[str, Any] = Field(default_factory=dict)

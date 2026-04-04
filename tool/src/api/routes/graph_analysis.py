@@ -13,6 +13,7 @@ router = APIRouter(tags=["graph-analysis"])
 def graph_analysis(
     namespace: str | None = Query(default=None),
     include_cluster_rbac: bool = Query(default=True),
+    enable_nvd_scoring: bool = Query(default=False),
     max_hops: int = Query(default=3, ge=0, le=10),
     max_depth: int = Query(default=8, ge=1, le=20),
 ) -> GraphAnalysisResponse:
@@ -20,6 +21,7 @@ def graph_analysis(
         payload = get_graph_analysis(
             namespace=namespace,
             include_cluster_rbac=include_cluster_rbac,
+            enable_nvd_scoring=enable_nvd_scoring,
             max_hops=max_hops,
             max_depth=max_depth,
         )

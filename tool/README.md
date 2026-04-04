@@ -4,6 +4,10 @@ Command-line analyzer for Kubernetes privilege escalation paths.
 
 It ingest cluster state, builds a directed graph of trust and permission relationships, runs security analysis algorithms, prints a kill-chain style CLI report, and can export both JSON and PDF artifacts.
 
+## Quick Access
+
+For a fast copy-paste command reference, use [FASTSTART.md](FASTSTART.md).
+
 ## Current Scope (Phases 2-5)
 
 - Data ingestion from live `kubectl` or mock JSON.
@@ -32,6 +36,58 @@ The scoring pipeline includes the following implemented controls:
 	- Adds `+3.0` to `Role -> Secret` edge weight.
 
 These are reflected naturally in shortest-path `risk_score` totals.
+
+## Bonus 2: Live CVE Scoring (NVD)
+
+Optional live CVE enrichment is available for Pod risk scoring. When enabled,
+the ingestor attempts to map each container image tag to NVD CPE/CVE records and
+adds the max CVSS score found to the Pod risk.
+
+Notes:
+
+- This feature is opt-in and disabled by default.
+- Explicit Pod CVSS annotations still take precedence over live lookup.
+- NVD rate limits apply (an API key is recommended).
+- Set `NVD_API_KEY` in your environment or pass `--nvd-api-key`.
+
+NVD source attribution notice (required by NVD terms):
+
+"This product uses data from the NVD API but is not endorsed or certified by the NVD."
+
+## Progress Update (2026-04-04)
+
+### Completed so far
+
+- Added NVD scoring service package:
+	- `src/services/cve/nvd_scorer.py`
+	- `src/services/cve/models.py`
+	- `src/services/cve/__init__.py`
+- Added optional kubectl-ingestion integration for live Pod CVE risk enrichment.
+- Added CLI toggles for live scoring:
+	- `--enable-nvd-scoring`
+	- `--nvd-api-key`
+	- `--nvd-timeout`
+- Added API toggle via query parameter:
+	- `enable_nvd_scoring=true`
+- Preserved annotation precedence:
+	- Existing Pod CVSS annotations override live NVD lookup.
+- Added graceful fallback behavior:
+	- Timeouts or NVD failures do not break ingestion.
+
+### Validation completed
+
+- Added and ran targeted tests for:
+	- NVD scorer behavior and caching.
+	- Ingestion risk enrichment and fallback handling.
+	- API wiring and default behavior.
+	- CLI orchestration regression checks.
+- Current targeted test status: passing.
+
+### Remaining improvements (next)
+
+- Improve CPE matching precision for less common image naming/version patterns.
+- Add request pacing/backoff for stricter NVD rate-limit handling.
+- Optionally expose CVE metadata directly in API node payloads for frontend display.
 
 ## Prerequisites
 
@@ -72,6 +128,9 @@ Expected response:
 
 ```bash
 curl "http://localhost:8000/api/v1/graph-analysis?namespace=vulnerable-ns&include_cluster_rbac=true&max_hops=3&max_depth=8"
+
+# Enable live NVD CVE scoring
+curl "http://localhost:8000/api/v1/graph-analysis?namespace=vulnerable-ns&include_cluster_rbac=true&enable_nvd_scoring=true"
 ```
 
 Common namespace checks:
@@ -95,6 +154,9 @@ kubectl apply -f src/k8s-yaml/secure-cluster.yaml
 ```bash
 uv run python src/main.py --ingestor kubectl --namespace vulnerable-ns --graph-out out/vulnerable-graph.json --pdf-out out/vulnerable-report.pdf
 uv run python src/main.py --ingestor kubectl --namespace secure-ns --graph-out out/secure-graph.json --pdf-out out/secure-report.pdf
+
+# Enable live NVD CVE scoring for Pod images
+uv run python src/main.py --ingestor kubectl --namespace vulnerable-ns --enable-nvd-scoring true --nvd-timeout 10
 ```
 
 ### Namespace RBAC modes
@@ -147,6 +209,9 @@ uv run python src/main.py --graph-in out/vulnerable-graph.json --pdf-out out/rep
 | `--pdf-out` | `None` | Optional output path for PDF kill-chain report artifact. |
 | `--fallback-file` | `None` | Optional fallback JSON if kubectl ingestion fails. |
 | `--include-cluster-rbac` | `true` | Controls cluster RBAC expansion: `false` = strict namespace mode (exclude all ClusterRoleBindings), `true` = include cluster RBAC (hybrid-filtered when `--namespace` is set). |
+| `--enable-nvd-scoring` | `false` | Enables live NVD CVE scoring for Pod container image tags. |
+| `--nvd-api-key` | `None` | Optional NVD API key (falls back to `NVD_API_KEY` env var). |
+| `--nvd-timeout` | `10.0` | Timeout in seconds for each NVD HTTP request. |
 | `--source` | `None` | Override source node id. |
 | `--target` | `None` | Override target sink node id. |
 | `--namespace` | `None` | Namespace scope for kubectl ingestion and source/sink auto-selection. |

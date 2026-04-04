@@ -12,10 +12,19 @@ export class GraphApiError extends Error {
   }
 }
 
-export async function fetchGraphAnalysis({ namespace = "vulnerable-ns", includeClusterRbac = true } = {}) {
+export async function fetchGraphAnalysis({
+  namespace = "vulnerable-ns",
+  includeClusterRbac = true,
+  enableNvdScoring = false,
+  maxHops = 3,
+  maxDepth = 8,
+} = {}) {
   const query = new URLSearchParams({
     namespace,
     include_cluster_rbac: String(includeClusterRbac),
+    enable_nvd_scoring: String(enableNvdScoring),
+    max_hops: String(maxHops),
+    max_depth: String(maxDepth),
   });
 
   let response;

@@ -19,6 +19,7 @@ from ingestion.kubectl_runner import KubectlDataIngestor
 from ingestion.mock_parser import MockDataIngestor
 from reporting.cli_formatter import render_cli_report
 from reporting.pdf_generator import generate_pdf_report
+from services.cve.nvd_scorer import NVDCveScorer
 
 
 def main() -> int:
@@ -30,11 +31,17 @@ def main() -> int:
         if args.ingestor == "mock":
             ingestor = MockDataIngestor(file_path=args.mock_file)
         else:
-            ingestor = KubectlDataIngestor(
-                fallback_file=args.fallback_file,
-                namespace=args.namespace,
-                include_cluster_rbac=_parse_bool_flag(args.include_cluster_rbac),
-            )
+            kubectl_kwargs: dict[str, Any] = {
+                "fallback_file": args.fallback_file,
+                "namespace": args.namespace,
+                "include_cluster_rbac": _parse_bool_flag(args.include_cluster_rbac),
+            }
+            if _parse_bool_flag(args.enable_nvd_scoring):
+                kubectl_kwargs["cve_scorer"] = NVDCveScorer(
+                    api_key=args.nvd_api_key,
+                    timeout=args.nvd_timeout,
+                )
+            ingestor = KubectlDataIngestor(**kubectl_kwargs)
 
         graph_data = ingestor.ingest()
         storage = NetworkXGraphStorage.from_cluster_graph_data(graph_data)
@@ -142,6 +149,23 @@ def _parse_args() -> argparse.Namespace:
             "Include cluster-level RBAC nodes. true: include cluster role bindings "
             "(hybrid-filtered when --namespace is set). false: strict namespace mode."
         ),
+    )
+    parser.add_argument(
+        "--enable-nvd-scoring",
+        choices=("true", "false"),
+        default="false",
+        help="Enable live NVD CVE scoring for Pod container images.",
+    )
+    parser.add_argument(
+        "--nvd-api-key",
+        default=None,
+        help="Optional NVD API key (falls back to NVD_API_KEY environment variable).",
+    )
+    parser.add_argument(
+        "--nvd-timeout",
+        type=float,
+        default=10.0,
+        help="Timeout in seconds for outbound NVD API requests.",
     )
     parser.add_argument("--source", default=None, help="Override source node_id")
     parser.add_argument("--target", default=None, help="Override target sink node_id")
@@ -327,6 +351,7 @@ def _build_path_record(
         "path": path_nodes,
         "hops": max(0, len(path_nodes) - 1),
         "risk_score": total_cost_value,
+        "severity": _risk_level_for_score(total_cost_value),
         "edges": edges,
     }
 
@@ -469,6 +494,16 @@ def _build_recommendations(attack_path_result: Any, critical_result: Any, cycles
         recommendations.append("Review unflagged crown jewels and public entrypoints to improve detection fidelity.")
 
     return recommendations
+
+
+def _risk_level_for_score(score: float) -> str:
+    if score >= 20:
+        return "CRITICAL"
+    if score >= 11:
+        return "HIGH"
+    if score >= 9:
+        return "MEDIUM"
+    return "LOW"
 
 
 def _export_graph_data(graph_data: ClusterGraphData, output_path: str | None) -> None:

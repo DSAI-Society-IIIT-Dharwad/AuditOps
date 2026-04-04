@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import sys
 
@@ -281,6 +281,98 @@ class TestBuildClusterGraphData(unittest.TestCase):
 		self.assertIn("ServiceAccount:ns-a:sa-a", node_ids)
 		self.assertNotIn("ClusterRoleBinding:cluster:exclude-other-ns", node_ids)
 		self.assertNotIn("ClusterRoleBinding:cluster:exclude-group-only", node_ids)
+
+	def test_pod_risk_includes_live_cve_bonus_when_enabled(self) -> None:
+		payload = {
+			"pods": {
+				"items": [
+					{
+						"metadata": {"name": "web", "namespace": "default"},
+						"spec": {
+							"serviceAccountName": "web-sa",
+							"automountServiceAccountToken": False,
+							"containers": [{"image": "nginx:1.25.3"}],
+						},
+					}
+				]
+			},
+			"serviceaccounts": {"items": []},
+			"roles": {"items": []},
+			"rolebindings": {"items": []},
+			"clusterrolebindings": {"items": []},
+			"secrets": {"items": []},
+			"configmaps": {"items": []},
+		}
+
+		scorer = Mock()
+		scorer.score_image.return_value = Mock(max_cvss=7.5)
+
+		graph = build_cluster_graph_data(payload, cve_scorer=scorer)
+		pod = next(node for node in graph.nodes if node.node_id == "Pod:default:web")
+		self.assertAlmostEqual(pod.risk_score, 12.5, places=3)
+
+	def test_annotation_cvss_overrides_live_cve_lookup(self) -> None:
+		payload = {
+			"pods": {
+				"items": [
+					{
+						"metadata": {
+							"name": "web",
+							"namespace": "default",
+							"annotations": {"security.analysis/cvss": "9.0"},
+						},
+						"spec": {
+							"serviceAccountName": "web-sa",
+							"automountServiceAccountToken": False,
+							"containers": [{"image": "nginx:1.25.3"}],
+						},
+					}
+				]
+			},
+			"serviceaccounts": {"items": []},
+			"roles": {"items": []},
+			"rolebindings": {"items": []},
+			"clusterrolebindings": {"items": []},
+			"secrets": {"items": []},
+			"configmaps": {"items": []},
+		}
+
+		scorer = Mock()
+		scorer.score_image.return_value = Mock(max_cvss=7.5)
+
+		graph = build_cluster_graph_data(payload, cve_scorer=scorer)
+		pod = next(node for node in graph.nodes if node.node_id == "Pod:default:web")
+		self.assertAlmostEqual(pod.risk_score, 14.0, places=3)
+		scorer.score_image.assert_not_called()
+
+	def test_live_cve_lookup_failures_do_not_break_ingestion(self) -> None:
+		payload = {
+			"pods": {
+				"items": [
+					{
+						"metadata": {"name": "web", "namespace": "default"},
+						"spec": {
+							"serviceAccountName": "web-sa",
+							"automountServiceAccountToken": False,
+							"containers": [{"image": "nginx:1.25.3"}],
+						},
+					}
+				]
+			},
+			"serviceaccounts": {"items": []},
+			"roles": {"items": []},
+			"rolebindings": {"items": []},
+			"clusterrolebindings": {"items": []},
+			"secrets": {"items": []},
+			"configmaps": {"items": []},
+		}
+
+		scorer = Mock()
+		scorer.score_image.side_effect = RuntimeError("nvd timeout")
+
+		graph = build_cluster_graph_data(payload, cve_scorer=scorer)
+		pod = next(node for node in graph.nodes if node.node_id == "Pod:default:web")
+		self.assertAlmostEqual(pod.risk_score, 5.0, places=3)
 
 
 class TestKubectlDataIngestor(unittest.TestCase):

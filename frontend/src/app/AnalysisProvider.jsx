@@ -7,6 +7,9 @@ const AnalysisContext = createContext(null);
 export function AnalysisProvider({ children }) {
   const [namespace, setNamespace] = useState("vulnerable-ns");
   const [includeClusterRbac, setIncludeClusterRbac] = useState(true);
+  const [enableNvdScoring, setEnableNvdScoring] = useState(false);
+  const [maxHops, setMaxHops] = useState(3);
+  const [maxDepth, setMaxDepth] = useState(8);
   const [showAttackPath, setShowAttackPath] = useState(true);
   const [showBlastRadius, setShowBlastRadius] = useState(true);
   const [showCriticalNode, setShowCriticalNode] = useState(true);
@@ -16,6 +19,9 @@ export function AnalysisProvider({ children }) {
 
   const namespaceRef = useRef(namespace);
   const includeClusterRbacRef = useRef(includeClusterRbac);
+  const enableNvdScoringRef = useRef(enableNvdScoring);
+  const maxHopsRef = useRef(maxHops);
+  const maxDepthRef = useRef(maxDepth);
 
   useEffect(() => {
     namespaceRef.current = namespace;
@@ -25,9 +31,24 @@ export function AnalysisProvider({ children }) {
     includeClusterRbacRef.current = includeClusterRbac;
   }, [includeClusterRbac]);
 
+  useEffect(() => {
+    enableNvdScoringRef.current = enableNvdScoring;
+  }, [enableNvdScoring]);
+
+  useEffect(() => {
+    maxHopsRef.current = maxHops;
+  }, [maxHops]);
+
+  useEffect(() => {
+    maxDepthRef.current = maxDepth;
+  }, [maxDepth]);
+
   const refreshAnalysis = useCallback(async (overrides = {}) => {
     const nextNamespace = String(overrides.namespace ?? namespaceRef.current).trim();
     const nextIncludeClusterRbac = overrides.includeClusterRbac ?? includeClusterRbacRef.current;
+    const nextEnableNvdScoring = overrides.enableNvdScoring ?? enableNvdScoringRef.current;
+    const nextMaxHops = Number.isFinite(overrides.maxHops) ? overrides.maxHops : maxHopsRef.current;
+    const nextMaxDepth = Number.isFinite(overrides.maxDepth) ? overrides.maxDepth : maxDepthRef.current;
 
     if (!nextNamespace) {
       setError({
@@ -45,6 +66,9 @@ export function AnalysisProvider({ children }) {
       const data = await fetchGraphAnalysis({
         namespace: nextNamespace,
         includeClusterRbac: nextIncludeClusterRbac,
+        enableNvdScoring: nextEnableNvdScoring,
+        maxHops: nextMaxHops,
+        maxDepth: nextMaxDepth,
       });
       setPayload(data);
     } catch (err) {
@@ -61,6 +85,9 @@ export function AnalysisProvider({ children }) {
     refreshAnalysis({
       namespace: namespaceRef.current,
       includeClusterRbac: includeClusterRbacRef.current,
+      enableNvdScoring: enableNvdScoringRef.current,
+      maxHops: maxHopsRef.current,
+      maxDepth: maxDepthRef.current,
     });
   }, [refreshAnalysis]);
 
@@ -70,6 +97,12 @@ export function AnalysisProvider({ children }) {
       setNamespace,
       includeClusterRbac,
       setIncludeClusterRbac,
+      enableNvdScoring,
+      setEnableNvdScoring,
+      maxHops,
+      setMaxHops,
+      maxDepth,
+      setMaxDepth,
       showAttackPath,
       setShowAttackPath,
       showBlastRadius,
@@ -84,6 +117,9 @@ export function AnalysisProvider({ children }) {
     [
       namespace,
       includeClusterRbac,
+      enableNvdScoring,
+      maxHops,
+      maxDepth,
       showAttackPath,
       showBlastRadius,
       showCriticalNode,
