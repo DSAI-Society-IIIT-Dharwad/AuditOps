@@ -1,92 +1,123 @@
 # Kubernetes Attack Path Visualizer
 
-A command-line security analysis tool for cloud-native infrastructure. This tool ingests the live state of a Kubernetes cluster via `kubectl`, models all entities and their relationships as a Directed Acyclic Graph (DAG), and applies classical graph traversal algorithms to detect exploitable multi-hop attack paths.
+Command-line analyzer for Kubernetes privilege escalation paths.
 
-## 🎯 Executive Summary
-Modern cloud-native applications run on Kubernetes clusters composed of interconnected entities: Users, Pods, ServiceAccounts, Roles, Secrets, and Databases. Attackers routinely exploit chains of seemingly benign permissions to reach sensitive resources, a technique known as privilege escalation via lateral movement. This tool replaces static spreadsheet reviews by mathematically modeling the cluster to surface hidden attack chains before an adversary does.
+It ingests cluster state, builds a directed graph of trust and permission relationships, runs security analysis algorithms, prints a kill-chain style CLI report, and can export both JSON and PDF artifacts.
 
-## 🚀 Phase 1 Quick Start
+## Current Scope (Phases 2-5)
 
-### Prerequisites
-* Python 3.10+
-* `kubectl`
-* A local Kubernetes runtime (`kind` recommended, `minikube` supported)
+- Data ingestion from live `kubectl` or mock JSON.
+- Deterministic normalized graph export (`cluster-graph.json` by default).
+- Graph reconstruction from exported JSON.
+- Core analysis:
+	- Blast radius (BFS)
+	- Shortest attack path (Dijkstra)
+	- Cycle detection (DFS)
+	- Critical node identification
+- Reporting:
+	- Compact kill-chain CLI output
+	- PDF export (`--pdf-out`)
 
-### 1. Create local cluster (kind)
+## Phase 4 Risk and Penalty Logic
+
+The scoring pipeline includes the following implemented controls:
+
+- God Mode Wildcard: `resources: ["*"]` or `verbs: ["*"]`
+	- Adds `+5.0` to affected RBAC binding edges.
+- Overly-Permissive Token: `automountServiceAccountToken` is `true` or missing
+	- Adds `+2.0` to Pod node risk.
+- Privileged Container: any container has `securityContext.privileged: true`
+	- Adds `+4.0` to Pod node risk.
+- Secret Snooping: secrets `get`/`list` without `resourceNames`
+	- Adds `+3.0` to `Role -> Secret` edge weight.
+
+These are reflected naturally in shortest-path `risk_score` totals.
+
+## Prerequisites
+
+- Python 3.10+
+- `uv`
+- `kubectl` (for live ingestion)
+- Optional local Kubernetes runtime (`kind` recommended)
+
+## Setup
+
+```bash
+uv sync
+```
+
+Optional local cluster bootstrap:
+
 ```bash
 kind create cluster --name hack2future --config src/k8s-yaml/cluster-config.yaml
 kubectl config use-context kind-hack2future
-```
-
-### 2. Apply deterministic test environments
-```bash
 kubectl apply -f src/k8s-yaml/vulnerable-cluster.yaml
 kubectl apply -f src/k8s-yaml/secure-cluster.yaml
 ```
 
-### 3. Run analysis per namespace
+## Usage
+
+### Live kubectl ingestion (namespace scoped)
+
 ```bash
-python src/main.py --ingestor kubectl --namespace vulnerable-ns
-python src/main.py --ingestor kubectl --namespace secure-ns
+uv run python src/main.py --ingestor kubectl --namespace vulnerable-ns --graph-out out/vulnerable-graph.json --pdf-out out/vulnerable-report.pdf
+uv run python src/main.py --ingestor kubectl --namespace secure-ns --graph-out out/secure-graph.json --pdf-out out/secure-report.pdf
 ```
 
-## ⚙️ Core Algorithms
-The application implements three primary graph traversal algorithms to analyze cluster security:
+### Mock ingestion
 
-1. **Blast Radius Detection (Breadth-First Search)**: Calculates the "Danger Zone" by determining how far an attacker can reach if a specific node is compromised, running BFS up to a configurable *N* hops.
-2. **Shortest Path to Crown Jewels (Dijkstra's Algorithm)**: Finds the lowest-cost attack path from a public entry point to a target "crown jewel" (e.g., Production Database) using exploitability scores as edge weights.
-3. **Circular Permission Detection (Depth-First Search)**: Detects misconfigured mutual admin grants that amplify attack paths by running DFS cycle detection across role bindings.
-
-Additionally, the tool performs **Critical Node Identification** to find the single graph node whose removal would break the most valid source-to-crown-jewel attack paths.
-
-## 🏗️ System Architecture & SOLID Principles
-To ensure the codebase is scalable and maintainable, the system is divided into four decoupled layers following Single Responsibility and Dependency Inversion principles:
-
-* **Layer 1: Data Ingestion:** Parses live cluster state via `kubectl` or reads from a static JSON file.
-* **Layer 2: Graph Construction:** Converts parsed entities and RBAC relationships into a standard DAG structure (e.g., using NetworkX). Nodes represent cluster entities, and directed edges represent trust relationships.
-* **Layer 3: Security Analysis:** Houses the graph traversal and pathfinding algorithms (BFS, DFS, Dijkstra's).
-* **Layer 4: Reporting:** Generates a human-readable and machine-readable Kill Chain Report outlining detected paths and remediation advice.
-
-## 📂 Directory Structure
-```text
-/k8s-attack-path-visualizer
-├── /core                   # Core interfaces and base classes (SOLID definitions)
-│   ├── models.py           # Node and Edge classes
-│   └── interfaces.py       # Base interfaces (DataIngestor, GraphStorage)
-├── /ingestion              # Layer 1: Data parsing
-│   ├── kubectl_runner.py   # Live cluster ingestion logic
-│   └── mock_parser.py      # Local JSON ingestion fallback
-├── /graph                  # Layer 2: Graph definition
-│   └── networkx_builder.py # Logic to construct the DAG
-├── /analysis               # Layer 3: The Brains
-│   ├── blast_radius.py     # BFS implementation
-│   ├── shortest_path.py    # Dijkstra's implementation
-│   ├── cycle_detect.py     # DFS implementation
-│   └── critical_node.py    # Node removal logic
-├── /reporting              # Layer 4: Presenter
-│   ├── cli_formatter.py    # Terminal output logic
-│   └── pdf_generator.py    # PDF export logic
-└── main.py                 # Application entry point
+```bash
+uv run python src/main.py --ingestor mock --mock-file mock-cluster-graph.json --graph-out out/mock-graph.json --pdf-out out/mock-report.pdf
 ```
 
-## 🧩 Core Data Models (Base Classes)
-To maintain a clean and predictable state across the application, all raw Kubernetes JSON data is strictly parsed into standardized Python classes before being loaded into the graph. 
+### Replay from exported graph JSON
 
-### `Node` (Cluster Entity)
-Every entity within the Kubernetes cluster inherits from a base `Node` class. This ensures the graph traversal algorithms have a consistent interface to interact with, regardless of whether they are looking at a user or a configuration file.
+```bash
+uv run python src/main.py --graph-in out/vulnerable-graph.json --pdf-out out/replay-report.pdf
+```
 
-**Standard Properties:**
-* **`entity_type`**: The kind of Kubernetes resource (e.g., `User`, `Pod`, `ServiceAccount`, `Role`, `ClusterRole`, `Secret`, `Database`, `ConfigMap`).
-* **`name`**: The unique identifier of the resource.
-* **`namespace`**: The cluster namespace where the resource resides.
-* **`is_source`**: Boolean flag identifying if this is a Public Entry Point (e.g., Internet-facing Web Server).
-* **`is_sink`**: Boolean flag identifying if this is a "Crown Jewel" (e.g., Production Database, Admin Role).
+## CLI Flags
 
-### `Edge` (Trust Relationship)
-Edges represent the directional permissions, network access, or trust relationships between two Nodes. 
+| Flag | Default | Description |
+|---|---|---|
+| `--ingestor` | `kubectl` | Data source mode: `kubectl` or `mock`. |
+| `--mock-file` | `mock-cluster-graph.json` | Mock JSON path when `--ingestor mock`. |
+| `--graph-in` | `None` | Optional exported graph JSON input. Skips live/mock ingestion. |
+| `--graph-out` | `cluster-graph.json` | Output path for normalized graph JSON artifact. |
+| `--pdf-out` | `None` | Optional output path for PDF kill-chain report artifact. |
+| `--fallback-file` | `None` | Optional fallback JSON if kubectl ingestion fails. |
+| `--source` | `None` | Override source node id. |
+| `--target` | `None` | Override target sink node id. |
+| `--namespace` | `None` | Namespace scope for kubectl ingestion and source/sink auto-selection. |
+| `--max-hops` | `3` | BFS hop limit for blast-radius analysis. |
+| `--max-depth` | `8` | DFS depth bound for critical-node path counting on cyclic graphs. |
 
-**Standard Properties:**
-* **`source_node_id`**: The origin of the permission (e.g., a Pod).
-* **`target_node_id`**: The destination or granted resource (e.g., a ServiceAccount).
-* **`relationship_type`**: A string classification of the link (e.g., `uses`, `bound_to`, `can_read`).
-* **`weight`**: The Exploitability Score of the connection. This represents the cost for an attacker to traverse this path and is used heavily by Dijkstra's algorithm. It is calculated using CVE severity (CVSS), misconfiguration scores, or known exploit availability.
+## Artifacts
+
+- Graph JSON: deterministic normalized export for downstream API/frontend consumers.
+- PDF: formatted kill-chain report rendered from the same report model used by CLI output.
+
+## Tests
+
+Run full test suite:
+
+```bash
+uv run python -m unittest discover -s test -v
+```
+
+Run focused reporting tests:
+
+```bash
+uv run python -m unittest test/test_cli_formatter.py -v
+uv run python -m unittest test/test_pdf_generator.py -v
+uv run python -m unittest test/test_main_export.py -v
+```
+
+## Key Paths
+
+- Entry point: `src/main.py`
+- Ingestion: `src/ingestion/kubectl_runner.py`, `src/ingestion/mock_parser.py`
+- Graph storage: `src/graph/networkx_builder.py`
+- Analysis: `src/analysis/*`
+- Reporting: `src/reporting/cli_formatter.py`, `src/reporting/pdf_generator.py`
+- Tests: `test/*`
