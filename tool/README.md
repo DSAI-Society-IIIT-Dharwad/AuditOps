@@ -2,7 +2,7 @@
 
 Command-line analyzer for Kubernetes privilege escalation paths.
 
-It ingests cluster state, builds a directed graph of trust and permission relationships, runs security analysis algorithms, prints a kill-chain style CLI report, and can export both JSON and PDF artifacts.
+It ingest cluster state, builds a directed graph of trust and permission relationships, runs security analysis algorithms, prints a kill-chain style CLI report, and can export both JSON and PDF artifacts.
 
 ## Current Scope (Phases 2-5)
 
