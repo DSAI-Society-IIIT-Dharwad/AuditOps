@@ -64,7 +64,11 @@ def main() -> int:
         sink_ids=sink_ids,
         max_depth=args.max_depth,
     )
-    attack_paths = all_attack_paths
+    attack_paths = _enumerate_best_attack_paths(
+        storage,
+        source_ids=source_ids,
+        sink_ids=sink_ids,
+    )
     blast_result = calculate_blast_radius(storage, source_id=source_id, max_hops=args.max_hops)
     blast_radius_by_source = _calculate_blast_radius_by_source(storage, source_ids=source_ids, max_hops=args.max_hops)
     cycles = detect_cycles(storage)
@@ -124,7 +128,7 @@ def main() -> int:
         "baseline_attack_paths": len(all_attack_paths),
         "critical_nodes": critical_nodes,
         "summary": {
-            "attack_paths_found": len(all_attack_paths),
+            "attack_paths_found": len(attack_paths),
             "cycles_found": len(cycles),
             "blast_nodes_exposed": total_blast_exposed,
             "critical_node": critical_nodes[0]["node_id"] if critical_nodes else "none",
@@ -538,7 +542,7 @@ def _calculate_blast_radius_by_source(
     max_hops: int,
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    for source_id in source_ids:
+    for source_id in sorted(source_ids, key=_source_sort_key):
         result = calculate_blast_radius(storage, source_id=source_id, max_hops=max_hops)
         hop_map: dict[str, list[str]] = {}
         for node_id, hop in result.hops_by_node.items():
@@ -553,6 +557,24 @@ def _calculate_blast_radius_by_source(
             }
         )
     return rows
+
+
+def _source_sort_key(source_id: str) -> tuple[int, int, str, str]:
+    parts = source_id.split(":", 2)
+    if len(parts) == 3:
+        entity_type, namespace, name = parts
+    else:
+        entity_type, namespace, name = "", "", source_id
+
+    entity_priority = {
+        "ExternalActor": 0,
+        "User": 1,
+        "Service": 2,
+    }.get(entity_type, 9)
+
+    # Keep common interactive users in the default namespace ahead of automation users.
+    namespace_priority = 0 if namespace == "default" else 1
+    return (entity_priority, namespace_priority, name, source_id)
 
 
 def _rank_critical_nodes_from_paths(

@@ -168,18 +168,19 @@ class CliFormatter:
 				lines.append(f"    {node_name:30} ({node_type:15})  -{removed:2d} paths  {bar}")
 
 		temporal = self._as_mapping(report.get("temporal"))
-		if temporal:
+		if self._should_render_temporal_section(temporal):
 			lines.append("")
 			lines.extend(self._format_temporal(temporal, section_title="[ SECTION 5 — TEMPORAL DIFF ALERTS ]"))
 
 		summary = self._as_mapping(report.get("summary"))
 		if summary:
+			attack_paths_found = self._as_int(summary.get("attack_paths_found"))
 			lines.extend(
 				[
 					"",
 					head,
 					"  SUMMARY",
-					f"  Attack paths found   : {self._as_int(summary.get('attack_paths_found'))}",
+					f"  Attack paths found   : {attack_paths_found}",
 					f"  Circular permissions : {self._as_int(summary.get('cycles_found'))}",
 					f"  Total blast-radius nodes exposed : {self._as_int(summary.get('blast_nodes_exposed'))}",
 					f"  Critical node to remove : {self._structured_node_name(summary.get('critical_node'))}",
@@ -299,6 +300,19 @@ class CliFormatter:
 					lines.append(f"    - {title}")
 
 		return lines
+
+	def _should_render_temporal_section(self, temporal: Mapping[str, Any]) -> bool:
+		if not temporal:
+			return False
+
+		connectivity = self._as_mapping(temporal.get("connectivity"))
+		new_paths = self._as_sequence(connectivity.get("new_attack_paths"))
+		new_count = self._as_int(
+			temporal.get("new_attack_paths_count"),
+			default=self._as_int(connectivity.get("new_attack_paths_count"), default=len(new_paths)),
+		)
+		alerts = self._as_sequence(temporal.get("alerts"))
+		return new_count > 0 or bool(new_paths) or bool(alerts)
 
 	def _format_recommendations(self, recommendations: Any) -> list[str]:
 		items = self._as_sequence(recommendations)
