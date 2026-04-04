@@ -291,6 +291,35 @@ button:disabled {
   font-weight: 700;
 }
 
+.ingest-actions {
+  margin-top: 10px;
+  margin-bottom: 8px;
+}
+
+.ingest-textarea {
+  width: 100%;
+  min-height: 220px;
+  resize: vertical;
+  border-radius: 10px;
+  border: 1px solid rgba(67, 70, 86, 0.75);
+  background: rgba(13, 28, 50, 0.9);
+  color: var(--text);
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 12px;
+  padding: 10px;
+  line-height: 1.45;
+}
+
+select {
+  background: #0d1c32;
+  border: 1px solid rgba(67, 70, 86, 0.75);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-family: "IBM Plex Sans", sans-serif;
+}
+
 .dashboard-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 420px;

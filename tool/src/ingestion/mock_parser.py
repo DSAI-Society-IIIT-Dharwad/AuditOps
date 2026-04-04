@@ -5,11 +5,15 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 from pathlib import Path
+from typing import TYPE_CHECKING
 from typing import Any
 
 from core.interfaces import DataIngestor
 from core.models import ClusterGraphData, Edge, Node
 from ingestion.kubectl_runner import build_cluster_graph_data
+
+if TYPE_CHECKING:
+	from services.cve.nvd_scorer import NVDCveScorer
 
 
 class MockParserError(RuntimeError):
@@ -38,10 +42,27 @@ class MockDataIngestor(DataIngestor):
 		if not isinstance(payload, Mapping):
 			raise MockParserError("mock JSON must be an object at top-level")
 
-		# Accept either pre-normalized graph payload or kubectl-style mocked resources.
-		if "nodes" in payload and "edges" in payload:
-			return _parse_normalized_graph(payload)
-		return build_cluster_graph_data(payload)
+		return parse_cluster_graph_payload(payload)
+
+
+def parse_cluster_graph_payload(
+	payload: Mapping[str, Any],
+	*,
+	namespace_scope: str | None = None,
+	include_cluster_rbac: bool = True,
+	cve_scorer: NVDCveScorer | None = None,
+) -> ClusterGraphData:
+	"""Parse graph input from normalized graph rows or kubectl-style resources."""
+	# Accept either pre-normalized graph payload or kubectl-style mocked resources.
+	if "nodes" in payload and "edges" in payload:
+		return _parse_normalized_graph(payload)
+
+	return build_cluster_graph_data(
+		payload,
+		namespace_scope=namespace_scope,
+		include_cluster_rbac=include_cluster_rbac,
+		cve_scorer=cve_scorer,
+	)
 
 
 def _parse_normalized_graph(payload: Mapping[str, Any]) -> ClusterGraphData:

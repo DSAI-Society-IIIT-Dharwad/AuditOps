@@ -37,6 +37,46 @@ export async function fetchGraphAnalysis({
     });
   }
 
+  return parseGraphAnalysisResponse(response, { namespace });
+}
+
+export async function fetchGraphAnalysisFromContent({
+  content,
+  format = "auto",
+  namespace = "vulnerable-ns",
+  includeClusterRbac = true,
+  enableNvdScoring = false,
+  maxHops = 3,
+  maxDepth = 8,
+} = {}) {
+  let response;
+  try {
+    response = await fetch(`${API_BASE}/graph-analysis/ingest`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        content,
+        format,
+        namespace,
+        include_cluster_rbac: includeClusterRbac,
+        enable_nvd_scoring: enableNvdScoring,
+        max_hops: maxHops,
+        max_depth: maxDepth,
+      }),
+    });
+  } catch (_err) {
+    throw new GraphApiError("Could not reach backend API.", {
+      kind: "network",
+      detail: "The API server may be down or unreachable.",
+    });
+  }
+
+  return parseGraphAnalysisResponse(response, { namespace });
+}
+
+async function parseGraphAnalysisResponse(response, { namespace }) {
   if (!response.ok) {
     const errorPayload = await response.json().catch(() => ({}));
     const detail = String(errorPayload.detail || "");

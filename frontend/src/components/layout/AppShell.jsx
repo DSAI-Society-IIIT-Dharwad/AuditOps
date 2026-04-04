@@ -17,6 +17,9 @@ export default function AppShell({ children }) {
           <NavLink to="/graph" className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}>
             Hunt
           </NavLink>
+          <NavLink to="/ingest" className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}>
+            Ingest
+          </NavLink>
           <NavLink to="/risks" className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}>
             Analyze
           </NavLink>

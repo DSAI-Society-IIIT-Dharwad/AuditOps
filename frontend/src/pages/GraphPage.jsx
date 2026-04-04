@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import GraphCanvas from "../components/graph/GraphCanvas";
+import AttackPathList from "../components/graph/AttackPathList";
 import ReportPanel from "../components/risk/ReportPanel";
 import { useAnalysis } from "../app/AnalysisProvider";
 import { nodeDisplayName } from "../lib/reportUtils";
@@ -31,8 +32,11 @@ export default function GraphPage() {
 
   const summary = useMemo(() => payload?.summary || {}, [payload]);
   const report = useMemo(() => payload?.report || {}, [payload]);
+  const attackPaths = useMemo(() => (Array.isArray(report.attack_paths) ? report.attack_paths : []), [report]);
   const temporal = useMemo(() => payload?.temporal || report?.temporal || {}, [payload, report]);
   const [selectedNodeId, setSelectedNodeId] = useState(null);
+  const [hoveredPath, setHoveredPath] = useState(null);
+  const [hoveredPathKey, setHoveredPathKey] = useState(null);
 
   useEffect(() => {
     const nodes = Array.isArray(payload?.nodes) ? payload.nodes : [];
@@ -53,6 +57,11 @@ export default function GraphPage() {
 
     setSelectedNodeId(preferredNodeId);
   }, [payload, selectedNodeId]);
+
+  useEffect(() => {
+    setHoveredPath(null);
+    setHoveredPathKey(null);
+  }, [payload]);
 
   const contextLine = useMemo(() => {
     const newAttackPaths = Number(temporal?.new_attack_paths_count || 0);
@@ -210,9 +219,23 @@ export default function GraphPage() {
               showBlastRadius={showBlastRadius}
               showCriticalNode={showCriticalNode}
               selectedNodeId={selectedNodeId}
+              hoveredPath={hoveredPath}
               onSelectNode={setSelectedNodeId}
             />
           </div>
+
+          <AttackPathList
+            attackPaths={attackPaths}
+            hoveredPathKey={hoveredPathKey}
+            onHoverPath={(path, pathKey) => {
+              setHoveredPath(path || null);
+              setHoveredPathKey(pathKey || null);
+            }}
+            onLeavePath={() => {
+              setHoveredPath(null);
+              setHoveredPathKey(null);
+            }}
+          />
 
           <div className="data-ribbon">
             <span>SCAN MODE: CONTINUOUS</span>

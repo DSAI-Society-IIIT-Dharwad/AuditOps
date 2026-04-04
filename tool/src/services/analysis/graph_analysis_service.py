@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from collections.abc import Mapping
 from typing import Any
 
 from analysis.blast_radius import calculate_blast_radius
@@ -8,6 +9,7 @@ from analysis.critical_node import identify_critical_node
 from analysis.cycle_detect import detect_cycles
 from graph.networkx_builder import NetworkXGraphStorage
 from ingestion.kubectl_runner import KubectlDataIngestor
+from ingestion.mock_parser import parse_cluster_graph_payload
 from main import (
     _build_recommendations,
     _calculate_blast_radius_by_source,
@@ -47,14 +49,65 @@ def get_graph_analysis(
         cve_scorer=cve_scorer,
     )
     graph_data = ingestor.ingest()
+    return _build_graph_analysis_response(
+        graph_data,
+        namespace=namespace,
+        include_cluster_rbac=include_cluster_rbac,
+        enable_nvd_scoring=enable_nvd_scoring,
+        max_hops=max_hops,
+        max_depth=max_depth,
+        temporal_source="api",
+        temporal_ingestor="kubectl",
+    )
+
+
+def get_graph_analysis_from_payload(
+    *,
+    graph_payload: Mapping[str, Any],
+    namespace: str | None,
+    include_cluster_rbac: bool = True,
+    enable_nvd_scoring: bool = False,
+    max_hops: int = 3,
+    max_depth: int = 8,
+) -> dict[str, Any]:
+    cve_scorer = NVDCveScorer() if enable_nvd_scoring else None
+    graph_data = parse_cluster_graph_payload(
+        graph_payload,
+        namespace_scope=namespace,
+        include_cluster_rbac=include_cluster_rbac,
+        cve_scorer=cve_scorer,
+    )
+    return _build_graph_analysis_response(
+        graph_data,
+        namespace=namespace,
+        include_cluster_rbac=include_cluster_rbac,
+        enable_nvd_scoring=enable_nvd_scoring,
+        max_hops=max_hops,
+        max_depth=max_depth,
+        temporal_source="api-upload",
+        temporal_ingestor="payload",
+    )
+
+
+def _build_graph_analysis_response(
+    graph_data: Any,
+    *,
+    namespace: str | None,
+    include_cluster_rbac: bool,
+    enable_nvd_scoring: bool,
+    max_hops: int,
+    max_depth: int,
+    temporal_source: str,
+    temporal_ingestor: str,
+) -> dict[str, Any]:
     storage = NetworkXGraphStorage.from_cluster_graph_data(graph_data)
 
     temporal_scope_id = build_scope_id(
         namespace=namespace,
         include_cluster_rbac=include_cluster_rbac,
-        ingestor="kubectl",
+        ingestor=temporal_ingestor,
         enable_nvd_scoring=enable_nvd_scoring,
-        source="api",
+        source=temporal_source,
     )
     snapshot_timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
     previous_snapshot = None
@@ -154,9 +207,9 @@ def get_graph_analysis(
             scope_id=temporal_scope_id,
             namespace=namespace,
             include_cluster_rbac=include_cluster_rbac,
-            ingestor="kubectl",
+            ingestor=temporal_ingestor,
             enable_nvd_scoring=enable_nvd_scoring,
-            source="api",
+            source=temporal_source,
             snapshot_timestamp=snapshot_timestamp,
         )
         response["temporal"]["current_snapshot_path"] = str(saved_snapshot.path)
