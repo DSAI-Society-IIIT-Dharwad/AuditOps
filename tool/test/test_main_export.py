@@ -130,6 +130,65 @@ class TestMainExport(unittest.TestCase):
             self.assertEqual(len(exported["nodes"]), 2)
             self.assertEqual(len(exported["edges"]), 1)
 
+    def test_main_writes_pdf_artifact_when_pdf_out_set(self) -> None:
+        payload = {
+            "schema_version": "1.0.0",
+            "nodes": [
+                {
+                    "node_id": "Pod:default:web",
+                    "entity_type": "Pod",
+                    "name": "web",
+                    "namespace": "default",
+                    "risk_score": 3.0,
+                    "is_source": True,
+                    "is_sink": False,
+                },
+                {
+                    "node_id": "Secret:default:db-creds",
+                    "entity_type": "Secret",
+                    "name": "db-creds",
+                    "namespace": "default",
+                    "risk_score": 8.0,
+                    "is_source": False,
+                    "is_sink": True,
+                },
+            ],
+            "edges": [
+                {
+                    "source_id": "Pod:default:web",
+                    "target_id": "Secret:default:db-creds",
+                    "relationship_type": "can_read",
+                    "weight": 2.0,
+                }
+            ],
+        }
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            graph_in = Path(tmp_dir) / "in.json"
+            graph_out = Path(tmp_dir) / "out.json"
+            pdf_out = Path(tmp_dir) / "report.pdf"
+            graph_in.write_text(json.dumps(payload), encoding="utf-8")
+
+            with patch.object(
+                sys,
+                "argv",
+                [
+                    "main.py",
+                    "--graph-in",
+                    str(graph_in),
+                    "--graph-out",
+                    str(graph_out),
+                    "--pdf-out",
+                    str(pdf_out),
+                ],
+            ), patch.object(main_mod.sys, "stdout", new=io.StringIO()):
+                code = main_mod.main()
+
+            self.assertEqual(code, 0)
+            self.assertTrue(pdf_out.exists())
+            pdf_bytes = pdf_out.read_bytes()
+            self.assertTrue(pdf_bytes.startswith(b"%PDF-1.4"))
+
 
 if __name__ == "__main__":
     unittest.main()

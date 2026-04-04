@@ -43,14 +43,15 @@ This plan reflects current repository progress and the exact remaining work for 
 - Path-score impact checks for these penalties are covered in [test/test_shortest_path.py](test/test_shortest_path.py) and targeted ingestion checks in [test/test_kubectl_runner.py](test/test_kubectl_runner.py).
 - Integration-style vulnerable vs secure path expectation checks are covered in [test/test_shortest_path.py](test/test_shortest_path.py).
 
-5. Phase 5 Reporting and Deliverables: partially completed
+5. Phase 5 Reporting and Deliverables: completed
 - CLI report is implemented in [src/reporting/cli_formatter.py](src/reporting/cli_formatter.py).
 - Main orchestration is wired in [src/main.py](src/main.py).
 - CLI formatter tests are implemented in [test/test_cli_formatter.py](test/test_cli_formatter.py).
-- Remaining: implement PDF export module [src/reporting/pdf_generator.py](src/reporting/pdf_generator.py).
-- Remaining: add CLI flags in [src/main.py](src/main.py) for output artifact paths (PDF and graph JSON).
-- Remaining: align CLI output to exact requested Kill Chain sample style (warning and check symbols, compact blast/cycle lines, arrow formatting, friendly node labels).
-- Remaining: add tests for PDF generation and output parity coverage.
+- PDF export module is implemented in [src/reporting/pdf_generator.py](src/reporting/pdf_generator.py).
+- CLI output path flag for PDF export is implemented via `--pdf-out` in [src/main.py](src/main.py).
+- Graph JSON output path remains configurable via `--graph-out` in [src/main.py](src/main.py).
+- CLI output style is updated to compact Kill Chain formatting with warning and check symbols, arrow path formatting, and friendly node labels in [src/reporting/cli_formatter.py](src/reporting/cli_formatter.py).
+- PDF generation and section parity smoke coverage are implemented in [test/test_pdf_generator.py](test/test_pdf_generator.py) and [test/test_main_export.py](test/test_main_export.py).
 
 6. Phase 6 Bonus (optional): not started
 - No FastAPI bridge or Cytoscape UI implementation yet.
@@ -65,14 +66,7 @@ This plan reflects current repository progress and the exact remaining work for 
 - Preserve regression coverage for attack-pattern penalties and node-risk enrichments in [test/test_kubectl_runner.py](test/test_kubectl_runner.py) and [test/test_shortest_path.py](test/test_shortest_path.py).
 - Keep vulnerable-vs-secure integration-style path checks passing in [test/test_shortest_path.py](test/test_shortest_path.py).
 
-3. Complete Phase 5 PDF deliverable
-- Implement [src/reporting/pdf_generator.py](src/reporting/pdf_generator.py).
-- Extend [src/main.py](src/main.py) with PDF output option.
-- Update [src/reporting/cli_formatter.py](src/reporting/cli_formatter.py) to match the requested sample output format exactly.
-- Add formatter tests for exact line-level style expectations (warning line, hop/risk line, blast-radius and cycles summary lines).
-- Add smoke test for PDF generation and section parity with CLI output.
-
-4. Stabilize release checklist
+3. Stabilize release checklist
 - Run all tests in [test](test) using uv.
 - Verify namespace-scoped runs for both environments.
 - Verify artifact outputs: cluster-graph.json and PDF.

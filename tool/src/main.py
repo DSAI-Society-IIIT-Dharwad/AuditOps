@@ -15,6 +15,7 @@ from graph.networkx_builder import NetworkXGraphStorage
 from ingestion.kubectl_runner import KubectlDataIngestor
 from ingestion.mock_parser import MockDataIngestor
 from reporting.cli_formatter import render_cli_report
+from reporting.pdf_generator import generate_pdf_report
 
 
 def main() -> int:
@@ -50,7 +51,7 @@ def main() -> int:
         "attack_path": attack_path_result.to_dict() if attack_path_result is not None else {
             "source": source_id,
             "target": sink_ids[0] if sink_ids else "unknown-target",
-            "path": [source_id],
+            "path": [],
             "risk_score": 0.0,
         },
         "blast_radius": blast_result.to_dict(),
@@ -59,6 +60,7 @@ def main() -> int:
         "recommendations": _build_recommendations(attack_path_result, critical_result, cycles),
     }
 
+    _export_pdf_report(report, args.pdf_out)
     sys.stdout.write(render_cli_report(report))
     return 0
 
@@ -80,6 +82,11 @@ def _parse_args() -> argparse.Namespace:
         "--graph-out",
         default="cluster-graph.json",
         help="Output path for normalized graph JSON export",
+    )
+    parser.add_argument(
+        "--pdf-out",
+        default=None,
+        help="Optional output path for PDF kill-chain report",
     )
     parser.add_argument(
         "--fallback-file",
@@ -229,6 +236,12 @@ def _graph_data_to_dict(graph_data: ClusterGraphData) -> dict[str, Any]:
         "nodes": node_rows,
         "edges": edge_rows,
     }
+
+
+def _export_pdf_report(report: dict[str, Any], output_path: str | None) -> None:
+    if not output_path:
+        return
+    generate_pdf_report(report, output_path)
 
 
 if __name__ == "__main__":

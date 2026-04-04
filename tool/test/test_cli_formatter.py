@@ -47,17 +47,18 @@ class TestCliFormatter(unittest.TestCase):
 		}
 
 		text = CliFormatter().format_report(report)
-		self.assertIn("Kubernetes Attack Path Report", text)
-		self.assertIn("WARNING: Attack Path Detected", text)
-		self.assertIn("Path Risk Score: 24.7 (CRITICAL)", text)
-		self.assertIn("Blast Radius: Pod:default:pod-x", text)
-		self.assertIn("Cycles Detected: 1", text)
-		self.assertIn("Best node to harden/remove", text)
-		self.assertIn("Recommendations", text)
+		self.assertIn("Kubernetes Kill Chain Report", text)
+		self.assertIn("⚠ Attack Path Detected", text)
+		self.assertIn("Hops: 4 | Risk: 24.7 (CRITICAL)", text)
+		self.assertIn("Blast Radius: 3 node(s) within 3 hop(s)", text)
+		self.assertIn("Cycles: 1", text)
+		self.assertIn("Sample Cycle: Service-A -> Service-B -> Service-A", text)
+		self.assertIn("Critical Node: RoleBinding/role-x (default)", text)
+		self.assertIn("✓ Recommendations", text)
 
 	def test_render_cli_report_function(self) -> None:
 		text = render_cli_report({})
-		self.assertIn("No analysis output available.", text)
+		self.assertIn("✓ No Attack Path Detected", text)
 
 
 if __name__ == "__main__":
