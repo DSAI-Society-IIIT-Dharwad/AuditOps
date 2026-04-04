@@ -5,6 +5,31 @@ A command-line security analysis tool for cloud-native infrastructure. This tool
 ## 🎯 Executive Summary
 Modern cloud-native applications run on Kubernetes clusters composed of interconnected entities: Users, Pods, ServiceAccounts, Roles, Secrets, and Databases. Attackers routinely exploit chains of seemingly benign permissions to reach sensitive resources, a technique known as privilege escalation via lateral movement. This tool replaces static spreadsheet reviews by mathematically modeling the cluster to surface hidden attack chains before an adversary does.
 
+## 🚀 Phase 1 Quick Start
+
+### Prerequisites
+* Python 3.10+
+* `kubectl`
+* A local Kubernetes runtime (`kind` recommended, `minikube` supported)
+
+### 1. Create local cluster (kind)
+```bash
+kind create cluster --name hack2future --config src/k8s-yaml/cluster-config.yaml
+kubectl config use-context kind-hack2future
+```
+
+### 2. Apply deterministic test environments
+```bash
+kubectl apply -f src/k8s-yaml/vulnerable-cluster.yaml
+kubectl apply -f src/k8s-yaml/secure-cluster.yaml
+```
+
+### 3. Run analysis per namespace
+```bash
+python src/main.py --ingestor kubectl --namespace vulnerable-ns
+python src/main.py --ingestor kubectl --namespace secure-ns
+```
+
 ## ⚙️ Core Algorithms
 The application implements three primary graph traversal algorithms to analyze cluster security:
 
