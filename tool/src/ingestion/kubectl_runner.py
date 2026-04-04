@@ -33,6 +33,11 @@ _BASE_RISK_BY_KIND: dict[str, float] = {
 	"Group": 4.0,
 }
 
+_GOD_MODE_WILDCARD_EDGE_PENALTY = 5.0
+_OVERLY_PERMISSIVE_TOKEN_NODE_PENALTY = 2.0
+_PRIVILEGED_CONTAINER_NODE_PENALTY = 4.0
+_SECRET_SNOOPING_EDGE_PENALTY = 3.0
+
 
 class KubectlIngestError(RuntimeError):
 	"""Raised when live cluster data cannot be retrieved or parsed."""
@@ -42,6 +47,7 @@ def build_cluster_graph_data(kube_payload: Mapping[str, Any]) -> ClusterGraphDat
 	"""Normalize Kubernetes resource payloads into Node and Edge objects."""
 	nodes_by_id: dict[str, Node] = {}
 	edges: list[Edge] = []
+	role_wildcard_penalty_by_id: dict[str, float] = {}
 
 	def add_node(node: Node) -> None:
 		nodes_by_id.setdefault(node.node_id, node)
@@ -106,8 +112,16 @@ def build_cluster_graph_data(kube_payload: Mapping[str, Any]) -> ClusterGraphDat
 		role_node = _make_node("Role", role_name, namespace)
 		add_node(role_node)
 
-		for rule in _safe_rules(item):
+		rules = _safe_rules(item)
+		if any(_rule_has_wildcard_resources_or_verbs(rule) for rule in rules):
+			role_wildcard_penalty_by_id[role_node.node_id] = _GOD_MODE_WILDCARD_EDGE_PENALTY
+
+		for rule in rules:
 			if _rule_targets_resource(rule, "secrets"):
+				edge_weight = 1.8
+				if _rule_is_secret_snooping(rule):
+					edge_weight += _SECRET_SNOOPING_EDGE_PENALTY
+
 				resource_names = rule.get("resourceNames", [])
 				if isinstance(resource_names, list) and resource_names:
 					for secret_name in resource_names:
@@ -118,7 +132,7 @@ def build_cluster_graph_data(kube_payload: Mapping[str, Any]) -> ClusterGraphDat
 								source_id=role_node.node_id,
 								target_id=secret_node.node_id,
 								relationship_type="can_read",
-								weight=1.8,
+								weight=edge_weight,
 							)
 						)
 				else:
@@ -129,7 +143,7 @@ def build_cluster_graph_data(kube_payload: Mapping[str, Any]) -> ClusterGraphDat
 									source_id=role_node.node_id,
 									target_id=existing_node.node_id,
 									relationship_type="can_read",
-									weight=1.8,
+									weight=edge_weight,
 								)
 							)
 
@@ -140,6 +154,7 @@ def build_cluster_graph_data(kube_payload: Mapping[str, Any]) -> ClusterGraphDat
 		role_name = str(role_ref.get("name") or "unknown")
 		role = _make_node(role_kind, role_name, namespace if role_kind == "Role" else "cluster")
 		add_node(role)
+		rbac_penalty = role_wildcard_penalty_by_id.get(role.node_id, 0.0)
 
 		for subject in item.get("subjects", []) or []:
 			subject_node = _subject_to_node(subject, fallback_namespace=namespace)
@@ -149,7 +164,7 @@ def build_cluster_graph_data(kube_payload: Mapping[str, Any]) -> ClusterGraphDat
 					source_id=subject_node.node_id,
 					target_id=role.node_id,
 					relationship_type="bound_to",
-					weight=2.2,
+					weight=2.2 + rbac_penalty,
 				)
 			)
 
@@ -160,7 +175,7 @@ def build_cluster_graph_data(kube_payload: Mapping[str, Any]) -> ClusterGraphDat
 				source_id=binding_node.node_id,
 				target_id=role.node_id,
 				relationship_type="grants",
-				weight=1.0,
+				weight=1.0 + rbac_penalty,
 			)
 		)
 
@@ -334,7 +349,12 @@ def _is_crown_jewel(resource: Mapping[str, Any]) -> bool:
 
 def _pod_risk_score(pod: Mapping[str, Any]) -> float:
 	base = _BASE_RISK_BY_KIND.get("Pod", 5.0)
-	return base + _pod_annotation_risk_bonus(pod)
+	return (
+		base
+		+ _pod_annotation_risk_bonus(pod)
+		+ _pod_automount_token_risk_bonus(pod)
+		+ _pod_privileged_container_risk_bonus(pod)
+	)
 
 
 def _pod_annotation_risk_bonus(pod: Mapping[str, Any]) -> float:
@@ -355,6 +375,32 @@ def _pod_annotation_risk_bonus(pod: Mapping[str, Any]) -> float:
 		if value is not None and str(value).strip():
 			# CVE id exists but no numeric CVSS score was provided.
 			return 2.0
+
+	return 0.0
+
+
+def _pod_automount_token_risk_bonus(pod: Mapping[str, Any]) -> float:
+	spec = pod.get("spec", {})
+	if not isinstance(spec, Mapping):
+		return _OVERLY_PERMISSIVE_TOKEN_NODE_PENALTY
+
+	automount = spec.get("automountServiceAccountToken")
+	if automount is None:
+		return _OVERLY_PERMISSIVE_TOKEN_NODE_PENALTY
+	if _is_truthy(automount):
+		return _OVERLY_PERMISSIVE_TOKEN_NODE_PENALTY
+	return 0.0
+
+
+def _pod_privileged_container_risk_bonus(pod: Mapping[str, Any]) -> float:
+	spec = pod.get("spec", {})
+	if not isinstance(spec, Mapping):
+		return 0.0
+
+	for container in _all_containers(spec):
+		security_context = container.get("securityContext", {})
+		if isinstance(security_context, Mapping) and _is_truthy(security_context.get("privileged")):
+			return _PRIVILEGED_CONTAINER_NODE_PENALTY
 
 	return 0.0
 
@@ -426,10 +472,23 @@ def _all_containers(spec: Mapping[str, Any]) -> list[dict[str, Any]]:
 	return containers
 
 
+def _is_truthy(value: Any) -> bool:
+	if isinstance(value, bool):
+		return value
+	if isinstance(value, str):
+		return value.strip().lower() in {"true", "1", "yes", "on"}
+	if isinstance(value, (int, float)):
+		return value != 0
+	return False
+
+
 def _dedupe_edges(edges: list[Edge]) -> list[Edge]:
 	unique: dict[tuple[str, str, str], Edge] = {}
 	for edge in edges:
-		unique[(edge.source_id, edge.target_id, edge.relationship_type)] = edge
+		key = (edge.source_id, edge.target_id, edge.relationship_type)
+		existing = unique.get(key)
+		if existing is None or edge.weight > existing.weight:
+			unique[key] = edge
 	return list(unique.values())
 
 
@@ -446,4 +505,25 @@ def _rule_targets_resource(rule: Mapping[str, Any], resource_name: str) -> bool:
 		return False
 	resource_set = {str(resource).lower() for resource in resources}
 	return resource_name.lower() in resource_set or "*" in resource_set
+
+
+def _rule_has_wildcard_resources_or_verbs(rule: Mapping[str, Any]) -> bool:
+	resources = rule.get("resources", [])
+	verbs = rule.get("verbs", [])
+	resource_set = {str(resource).lower() for resource in resources} if isinstance(resources, list) else set()
+	verb_set = {str(verb).lower() for verb in verbs} if isinstance(verbs, list) else set()
+	return "*" in resource_set or "*" in verb_set
+
+
+def _rule_is_secret_snooping(rule: Mapping[str, Any]) -> bool:
+	if not _rule_targets_resource(rule, "secrets"):
+		return False
+	verbs = rule.get("verbs", [])
+	if not isinstance(verbs, list):
+		return False
+	verb_set = {str(verb).lower() for verb in verbs}
+	if not ({"get", "list", "*"} & verb_set):
+		return False
+	resource_names = rule.get("resourceNames")
+	return not (isinstance(resource_names, list) and len(resource_names) > 0)
 

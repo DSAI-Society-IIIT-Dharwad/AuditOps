@@ -115,6 +115,104 @@ class TestBuildClusterGraphData(unittest.TestCase):
 			edge_triplets,
 		)
 
+	def test_overly_permissive_token_and_privileged_container_risk_bonus(self) -> None:
+		payload = {
+			"pods": {
+				"items": [
+					{
+						"metadata": {"name": "risky", "namespace": "default"},
+						"spec": {
+							"serviceAccountName": "risky-sa",
+							"containers": [{"securityContext": {"privileged": True}}],
+						},
+					}
+				]
+			},
+			"serviceaccounts": {"items": []},
+			"roles": {"items": []},
+			"rolebindings": {"items": []},
+			"clusterrolebindings": {"items": []},
+			"secrets": {"items": []},
+			"configmaps": {"items": []},
+		}
+
+		graph = build_cluster_graph_data(payload)
+		pod = next(node for node in graph.nodes if node.node_id == "Pod:default:risky")
+		self.assertAlmostEqual(pod.risk_score, 11.0, places=3)
+
+	def test_god_mode_wildcard_adds_penalty_to_rbac_binding_edges(self) -> None:
+		payload = {
+			"pods": {"items": []},
+			"serviceaccounts": {"items": []},
+			"roles": {
+				"items": [
+					{
+						"metadata": {"name": "god-role", "namespace": "default"},
+						"rules": [{"resources": ["*"], "verbs": ["get"]}],
+					}
+				]
+			},
+			"rolebindings": {
+				"items": [
+					{
+						"metadata": {"name": "bind-god", "namespace": "default"},
+						"roleRef": {"kind": "Role", "name": "god-role"},
+						"subjects": [{"kind": "User", "name": "dev-1"}],
+					}
+				]
+			},
+			"clusterrolebindings": {"items": []},
+			"secrets": {"items": []},
+			"configmaps": {"items": []},
+		}
+
+		graph = build_cluster_graph_data(payload)
+		edges = {
+			(edge.source_id, edge.target_id, edge.relationship_type): edge.weight
+			for edge in graph.edges
+		}
+
+		self.assertAlmostEqual(
+			edges[("User:cluster:dev-1", "Role:default:god-role", "bound_to")],
+			7.2,
+			places=3,
+		)
+		self.assertAlmostEqual(
+			edges[("RoleBinding:default:bind-god", "Role:default:god-role", "grants")],
+			6.0,
+			places=3,
+		)
+
+	def test_secret_snooping_adds_penalty_without_resource_names(self) -> None:
+		payload = {
+			"pods": {"items": []},
+			"serviceaccounts": {"items": []},
+			"roles": {
+				"items": [
+					{
+						"metadata": {"name": "secret-reader", "namespace": "default"},
+						"rules": [{"resources": ["secrets"], "verbs": ["get"]}],
+					}
+				]
+			},
+			"rolebindings": {"items": []},
+			"clusterrolebindings": {"items": []},
+			"secrets": {"items": [{"metadata": {"name": "db-secret", "namespace": "default"}}]},
+			"configmaps": {"items": []},
+		}
+
+		graph = build_cluster_graph_data(payload)
+		edges = {
+			(edge.source_id, edge.target_id, edge.relationship_type): edge.weight
+			for edge in graph.edges
+		}
+
+		self.assertAlmostEqual(
+			edges[("Role:default:secret-reader", "Secret:default:db-secret", "can_read")],
+			4.8,
+			places=3,
+		)
+
 
 class TestKubectlDataIngestor(unittest.TestCase):
 	@patch("ingestion.kubectl_runner.subprocess.run")
@@ -182,7 +280,10 @@ class TestKubectlDataIngestor(unittest.TestCase):
 							"namespace": "default",
 							"annotations": {"security.analysis/cvss": "8.1"},
 						},
-						"spec": {"serviceAccountName": "web-sa"},
+						"spec": {
+							"serviceAccountName": "web-sa",
+							"automountServiceAccountToken": False,
+						},
 					}
 				]
 			},
@@ -208,7 +309,10 @@ class TestKubectlDataIngestor(unittest.TestCase):
 							"namespace": "default",
 							"annotations": {"security.analysis/cve": "CVE-2024-1234"},
 						},
-						"spec": {"serviceAccountName": "web-sa"},
+						"spec": {
+							"serviceAccountName": "web-sa",
+							"automountServiceAccountToken": False,
+						},
 					}
 				]
 			},
