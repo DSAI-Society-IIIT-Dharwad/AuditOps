@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import json
+from pathlib import Path
 import sys
 from typing import Any
 
@@ -8,6 +10,7 @@ from analysis.blast_radius import calculate_blast_radius
 from analysis.critical_node import identify_critical_node
 from analysis.cycle_detect import detect_cycles
 from analysis.shortest_path import dijkstra_shortest_path
+from core.models import ClusterGraphData
 from graph.networkx_builder import NetworkXGraphStorage
 from ingestion.kubectl_runner import KubectlDataIngestor
 from ingestion.mock_parser import MockDataIngestor
@@ -23,6 +26,7 @@ def main() -> int:
         ingestor = KubectlDataIngestor(fallback_file=args.fallback_file, namespace=args.namespace)
 
     graph_data = ingestor.ingest()
+    _export_graph_data(graph_data, args.graph_out)
     storage = NetworkXGraphStorage.from_cluster_graph_data(graph_data)
 
     source_id = _resolve_source_id(storage, args.source, namespace=args.namespace)
@@ -62,6 +66,11 @@ def _parse_args() -> argparse.Namespace:
         "--mock-file",
         default="mock-cluster-graph.json",
         help="Path to mock JSON file (used when --ingestor mock)",
+    )
+    parser.add_argument(
+        "--graph-out",
+        default="cluster-graph.json",
+        help="Output path for normalized graph JSON export",
     )
     parser.add_argument(
         "--fallback-file",
@@ -165,6 +174,52 @@ def _build_recommendations(attack_path_result: Any, critical_result: Any, cycles
         recommendations.append("Review unflagged crown jewels and public entrypoints to improve detection fidelity.")
 
     return recommendations
+
+
+def _export_graph_data(graph_data: ClusterGraphData, output_path: str | None) -> None:
+    if not output_path:
+        return
+
+    path = Path(output_path)
+    if path.parent and path.parent != Path("."):
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+    with path.open("w", encoding="utf-8") as fp:
+        json.dump(_graph_data_to_dict(graph_data), fp, indent=2)
+        fp.write("\n")
+
+
+def _graph_data_to_dict(graph_data: ClusterGraphData) -> dict[str, Any]:
+    node_rows = [
+        {
+            "node_id": node.node_id,
+            "entity_type": node.entity_type,
+            "name": node.name,
+            "namespace": node.namespace,
+            "risk_score": node.risk_score,
+            "is_source": node.is_source,
+            "is_sink": node.is_sink,
+        }
+        for node in graph_data.nodes
+    ]
+    edge_rows = [
+        {
+            "source_id": edge.source_id,
+            "target_id": edge.target_id,
+            "relationship_type": edge.relationship_type,
+            "weight": edge.weight,
+        }
+        for edge in graph_data.edges
+    ]
+
+    node_rows.sort(key=lambda row: str(row["node_id"]))
+    edge_rows.sort(key=lambda row: (str(row["source_id"]), str(row["target_id"]), str(row["relationship_type"])))
+
+    return {
+        "schema_version": "1.0.0",
+        "nodes": node_rows,
+        "edges": edge_rows,
+    }
 
 
 if __name__ == "__main__":

@@ -11,55 +11,83 @@ This plan reflects current repository progress and the exact remaining work for 
 - Python baseline is aligned to 3.10+ in [pyproject.toml](pyproject.toml).
 - Setup commands are documented in [README.md](README.md).
 
-2. Phase 2 Data Ingestion: mostly completed
+2. Phase 2 Data Ingestion: completed
 - Live ingestion and namespace-scoped kubectl reading are implemented in [src/ingestion/kubectl_runner.py](src/ingestion/kubectl_runner.py).
 - Mock ingestion is implemented in [src/ingestion/mock_parser.py](src/ingestion/mock_parser.py).
 - RBAC subject and role relationship parsing is implemented.
 - Role rule parsing to secrets is implemented.
-- Remaining: deterministic export to cluster-graph.json and tests for export.
+- Ingestion unit coverage exists in [test/test_kubectl_runner.py](test/test_kubectl_runner.py) and [test/test_mock_parser.py](test/test_mock_parser.py).
+- Deterministic graph export to cluster-graph.json is implemented in [src/main.py](src/main.py).
+- Pod CVSS or CVE annotation parsing into risk_score enrichment is implemented in [src/ingestion/kubectl_runner.py](src/ingestion/kubectl_runner.py).
+- Export behavior and enrichment tests are implemented in [test/test_main_export.py](test/test_main_export.py) and [test/test_kubectl_runner.py](test/test_kubectl_runner.py).
 
 3. Phase 3 Graph Construction: mostly completed
 - NetworkX graph storage/builder exists in [src/graph/networkx_builder.py](src/graph/networkx_builder.py).
-- Remaining: explicit artifact read flow from exported cluster-graph.json and tests around reconstruction.
+- Graph construction from normalized in-memory data is implemented via `from_cluster_graph_data(...)`.
+- Graph-layer unit coverage exists in [test/test_networkx_builder.py](test/test_networkx_builder.py).
+- Remaining: explicit artifact read flow from exported cluster-graph.json.
+- Remaining: round-trip validation (exported JSON -> graph rebuild -> equivalent nodes/edges).
+- Remaining: reconstruction tests that verify edge weights and relationship types are preserved.
+- Remaining: clear handling/documentation for cycle presence during artifact-based graph reconstruction.
 
 4. Phase 4 Core Security Algorithms: completed baseline
 - BFS in [src/analysis/blast_radius.py](src/analysis/blast_radius.py).
 - Dijkstra in [src/analysis/shortest_path.py](src/analysis/shortest_path.py).
 - DFS cycle detection in [src/analysis/cycle_detect.py](src/analysis/cycle_detect.py).
 - Critical node logic in [src/analysis/critical_node.py](src/analysis/critical_node.py).
-- Remaining: risk-scoring fidelity enhancement (pod CVSS and path composition tuning) and integration tests across vulnerable vs secure namespaces.
+- Attack-pattern implementation audit:
+- God Mode Wildcard (`resources: ["*"]` or `verbs: ["*"]`): not implemented.
+- Overly-Permissive Token (`automountServiceAccountToken` true or missing): not implemented.
+- Privileged Container (`securityContext.privileged: true`): not implemented.
+- Secret Snooping (secrets get or list without `resourceNames`): partially implemented.
+- Current code creates Role -> Secret edges for broad secret access in [src/ingestion/kubectl_runner.py](src/ingestion/kubectl_runner.py), but no dedicated +3.0 penalty logic yet.
+- Remaining: add pattern-based penalties and node-risk enrichments, then validate path scoring impacts with tests.
 
 5. Phase 5 Reporting and Deliverables: partially completed
 - CLI report is implemented in [src/reporting/cli_formatter.py](src/reporting/cli_formatter.py).
 - Main orchestration is wired in [src/main.py](src/main.py).
-- Remaining: PDF generator module and CLI option to export PDF.
+- CLI formatter tests are implemented in [test/test_cli_formatter.py](test/test_cli_formatter.py).
+- Remaining: implement PDF export module [src/reporting/pdf_generator.py](src/reporting/pdf_generator.py).
+- Remaining: add CLI flags in [src/main.py](src/main.py) for output artifact paths (PDF and graph JSON).
+- Remaining: align CLI output to exact requested Kill Chain sample style (warning and check symbols, compact blast/cycle lines, arrow formatting, friendly node labels).
+- Remaining: add tests for PDF generation and output parity coverage.
 
 6. Phase 6 Bonus (optional): not started
 - No FastAPI bridge or Cytoscape UI implementation yet.
 
 ## Execution Plan (Remaining)
 
-1. Complete Phase 2 export
-- Add normalized graph export to JSON in [src/main.py](src/main.py) with flag support (default path cluster-graph.json).
-- Reuse Node and Edge schema from [src/core/models.py](src/core/models.py).
-- Add unit tests in [test/test_kubectl_runner.py](test/test_kubectl_runner.py) and/or new export-focused tests.
+1. Maintain Phase 2 stability
+- Keep regression coverage for ingestion and export in [test/test_kubectl_runner.py](test/test_kubectl_runner.py), [test/test_mock_parser.py](test/test_mock_parser.py), and [test/test_main_export.py](test/test_main_export.py).
+- Keep exported schema backward-compatible for downstream frontend/API consumers.
 
 2. Complete Phase 3 artifact import and validation
 - Add explicit graph reconstruction from exported JSON using [src/graph/networkx_builder.py](src/graph/networkx_builder.py).
 - Add tests verifying exported graph round-trips into equivalent node and edge sets.
+- Add tests for reconstruction accuracy of edge metadata (relationship_type and weight).
+- Document reconstruction behavior when cycles exist (do not hard-fail; allow analysis to report cycles).
 
 3. Strengthen Phase 4 with integration checks
 - Add integration tests that compare vulnerable and secure behavior:
 - vulnerable namespace: non-zero source-to-secret path expected
 - secure namespace: no critical secret path expected
+- Implement attack-pattern penalties in ingestion and scoring pipeline:
+- God Mode Wildcard: add +5.0 to affected RBAC edge weights when Role rules contain wildcard resources or verbs.
+- Overly-Permissive Token: add +2.0 to Pod node risk when `automountServiceAccountToken` is true or absent.
+- Privileged Container: add +4.0 to Pod node risk when any container has `securityContext.privileged: true`.
+- Secret Snooping: add +3.0 to Role -> Secret edge weight when secrets get or list is granted without `resourceNames`.
+- Wire penalty metadata through [src/ingestion/kubectl_runner.py](src/ingestion/kubectl_runner.py) so [src/analysis/shortest_path.py](src/analysis/shortest_path.py) naturally reflects risk in `total_cost`.
+- Add targeted tests for each pattern in [test/test_kubectl_runner.py](test/test_kubectl_runner.py) and path-score impact checks in [test/test_shortest_path.py](test/test_shortest_path.py).
 
 4. Complete Phase 5 PDF deliverable
 - Implement [src/reporting/pdf_generator.py](src/reporting/pdf_generator.py).
 - Extend [src/main.py](src/main.py) with PDF output option.
+- Update [src/reporting/cli_formatter.py](src/reporting/cli_formatter.py) to match the requested sample output format exactly.
+- Add formatter tests for exact line-level style expectations (warning line, hop/risk line, blast-radius and cycles summary lines).
 - Add smoke test for PDF generation and section parity with CLI output.
 
 5. Stabilize release checklist
-- Run all tests in [test](test).
+- Run all tests in [test](test) using uv.
 - Verify namespace-scoped runs for both environments.
 - Verify artifact outputs: cluster-graph.json and PDF.
 
@@ -70,11 +98,11 @@ This plan reflects current repository progress and the exact remaining work for 
 - kubectl apply -f [src/k8s-yaml/secure-cluster.yaml](src/k8s-yaml/secure-cluster.yaml)
 
 2. Run analysis
-- python src/main.py --ingestor kubectl --namespace vulnerable-ns
-- python src/main.py --ingestor kubectl --namespace secure-ns
+- uv run python src/main.py --ingestor kubectl --namespace vulnerable-ns
+- uv run python src/main.py --ingestor kubectl --namespace secure-ns
 
 3. Run tests
-- python -m unittest discover -s [test](test) -v
+- uv run python -m unittest discover -s [test](test) -v
 
 ## Decisions
 
@@ -86,3 +114,6 @@ This plan reflects current repository progress and the exact remaining work for 
 
 3. Scope rule
 - Namespace-scoped analysis remains default for deterministic test environments.
+
+4. Tooling rule
+- Use uv for Python execution, dependency sync, and test commands.

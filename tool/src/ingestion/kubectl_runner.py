@@ -51,7 +51,13 @@ def build_cluster_graph_data(kube_payload: Mapping[str, Any]) -> ClusterGraphDat
 
 	for item in _safe_items(kube_payload.get("pods")):
 		pod_name, namespace = _metadata_name_ns(item)
-		pod = _make_node("Pod", pod_name, namespace, is_source=_is_public_entrypoint(item))
+		pod = _make_node(
+			"Pod",
+			pod_name,
+			namespace,
+			risk_score=_pod_risk_score(item),
+			is_source=_is_public_entrypoint(item),
+		)
 		add_node(pod)
 
 		sa_name = item.get("spec", {}).get("serviceAccountName") or "default"
@@ -324,6 +330,41 @@ def _is_crown_jewel(resource: Mapping[str, Any]) -> bool:
 			return True
 
 	return False
+
+
+def _pod_risk_score(pod: Mapping[str, Any]) -> float:
+	base = _BASE_RISK_BY_KIND.get("Pod", 5.0)
+	return base + _pod_annotation_risk_bonus(pod)
+
+
+def _pod_annotation_risk_bonus(pod: Mapping[str, Any]) -> float:
+	metadata = pod.get("metadata", {})
+	annotations = metadata.get("annotations", {})
+	if not isinstance(annotations, Mapping):
+		return 0.0
+
+	for key in ("security.analysis/cvss", "security.hack2future.io/cvss", "cvss"):
+		if key not in annotations:
+			continue
+		parsed = _as_non_negative_float(annotations.get(key))
+		if parsed is not None:
+			return parsed
+
+	for key in ("security.analysis/cve", "security.hack2future.io/cve", "cve"):
+		value = annotations.get(key)
+		if value is not None and str(value).strip():
+			# CVE id exists but no numeric CVSS score was provided.
+			return 2.0
+
+	return 0.0
+
+
+def _as_non_negative_float(value: Any) -> float | None:
+	try:
+		parsed = float(value)
+	except (TypeError, ValueError):
+		return None
+	return parsed if parsed >= 0 else None
 
 
 def _pod_secret_refs(pod: Mapping[str, Any]) -> set[str]:

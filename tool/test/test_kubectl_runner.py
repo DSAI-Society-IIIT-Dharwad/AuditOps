@@ -140,6 +140,7 @@ class TestKubectlDataIngestor(unittest.TestCase):
 		fallback_payload = {
 			"pods": {"items": [{"metadata": {"name": "p1", "namespace": "default"}, "spec": {}}]},
 			"serviceaccounts": {"items": []},
+			"roles": {"items": []},
 			"rolebindings": {"items": []},
 			"clusterrolebindings": {"items": []},
 			"secrets": {"items": []},
@@ -170,6 +171,58 @@ class TestKubectlDataIngestor(unittest.TestCase):
 		):
 			with self.assertRaises(KubectlIngestError):
 				ingestor.ingest()
+
+	def test_pod_cvss_annotation_enriches_risk_score(self) -> None:
+		payload = {
+			"pods": {
+				"items": [
+					{
+						"metadata": {
+							"name": "web",
+							"namespace": "default",
+							"annotations": {"security.analysis/cvss": "8.1"},
+						},
+						"spec": {"serviceAccountName": "web-sa"},
+					}
+				]
+			},
+			"serviceaccounts": {"items": []},
+			"roles": {"items": []},
+			"rolebindings": {"items": []},
+			"clusterrolebindings": {"items": []},
+			"secrets": {"items": []},
+			"configmaps": {"items": []},
+		}
+
+		graph = build_cluster_graph_data(payload)
+		pod = next(node for node in graph.nodes if node.node_id == "Pod:default:web")
+		self.assertAlmostEqual(pod.risk_score, 13.1, places=3)
+
+	def test_pod_cve_annotation_adds_default_risk_bonus(self) -> None:
+		payload = {
+			"pods": {
+				"items": [
+					{
+						"metadata": {
+							"name": "web",
+							"namespace": "default",
+							"annotations": {"security.analysis/cve": "CVE-2024-1234"},
+						},
+						"spec": {"serviceAccountName": "web-sa"},
+					}
+				]
+			},
+			"serviceaccounts": {"items": []},
+			"roles": {"items": []},
+			"rolebindings": {"items": []},
+			"clusterrolebindings": {"items": []},
+			"secrets": {"items": []},
+			"configmaps": {"items": []},
+		}
+
+		graph = build_cluster_graph_data(payload)
+		pod = next(node for node in graph.nodes if node.node_id == "Pod:default:web")
+		self.assertAlmostEqual(pod.risk_score, 7.0, places=3)
 
 
 if __name__ == "__main__":
