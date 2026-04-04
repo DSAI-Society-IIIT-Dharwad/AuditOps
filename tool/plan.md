@@ -30,18 +30,18 @@ This plan reflects current repository progress and the exact remaining work for 
 - Reconstruction tests verify edge weights and relationship types are preserved in [test/test_networkx_builder.py](test/test_networkx_builder.py).
 - Cycle-presence handling for artifact-based reconstruction is explicitly documented and covered by tests in [src/graph/networkx_builder.py](src/graph/networkx_builder.py) and [test/test_networkx_builder.py](test/test_networkx_builder.py).
 
-4. Phase 4 Core Security Algorithms: completed baseline
+4. Phase 4 Core Security Algorithms: completed
 - BFS in [src/analysis/blast_radius.py](src/analysis/blast_radius.py).
 - Dijkstra in [src/analysis/shortest_path.py](src/analysis/shortest_path.py).
 - DFS cycle detection in [src/analysis/cycle_detect.py](src/analysis/cycle_detect.py).
 - Critical node logic in [src/analysis/critical_node.py](src/analysis/critical_node.py).
-- Attack-pattern implementation audit:
-- God Mode Wildcard (`resources: ["*"]` or `verbs: ["*"]`): not implemented.
-- Overly-Permissive Token (`automountServiceAccountToken` true or missing): not implemented.
-- Privileged Container (`securityContext.privileged: true`): not implemented.
-- Secret Snooping (secrets get or list without `resourceNames`): partially implemented.
-- Current code creates Role -> Secret edges for broad secret access in [src/ingestion/kubectl_runner.py](src/ingestion/kubectl_runner.py), but no dedicated +3.0 penalty logic yet.
-- Remaining: add pattern-based penalties and node-risk enrichments, then validate path scoring impacts with tests.
+- Attack-pattern implementation audit: implemented.
+- God Mode Wildcard (`resources: ["*"]` or `verbs: ["*"]`): implemented as +5.0 penalty on affected RBAC binding edges in [src/ingestion/kubectl_runner.py](src/ingestion/kubectl_runner.py).
+- Overly-Permissive Token (`automountServiceAccountToken` true or missing): implemented as +2.0 Pod risk in [src/ingestion/kubectl_runner.py](src/ingestion/kubectl_runner.py).
+- Privileged Container (`securityContext.privileged: true`): implemented as +4.0 Pod risk in [src/ingestion/kubectl_runner.py](src/ingestion/kubectl_runner.py).
+- Secret Snooping (secrets get or list without `resourceNames`): implemented as +3.0 Role -> Secret edge penalty in [src/ingestion/kubectl_runner.py](src/ingestion/kubectl_runner.py).
+- Path-score impact checks for these penalties are covered in [test/test_shortest_path.py](test/test_shortest_path.py) and targeted ingestion checks in [test/test_kubectl_runner.py](test/test_kubectl_runner.py).
+- Integration-style vulnerable vs secure path expectation checks are covered in [test/test_shortest_path.py](test/test_shortest_path.py).
 
 5. Phase 5 Reporting and Deliverables: partially completed
 - CLI report is implemented in [src/reporting/cli_formatter.py](src/reporting/cli_formatter.py).
@@ -61,17 +61,9 @@ This plan reflects current repository progress and the exact remaining work for 
 - Keep regression coverage for ingestion and export in [test/test_kubectl_runner.py](test/test_kubectl_runner.py), [test/test_mock_parser.py](test/test_mock_parser.py), and [test/test_main_export.py](test/test_main_export.py).
 - Keep exported schema backward-compatible for downstream frontend/API consumers.
 
-2. Strengthen Phase 4 with integration checks
-- Add integration tests that compare vulnerable and secure behavior:
-- vulnerable namespace: non-zero source-to-secret path expected
-- secure namespace: no critical secret path expected
-- Implement attack-pattern penalties in ingestion and scoring pipeline:
-- God Mode Wildcard: add +5.0 to affected RBAC edge weights when Role rules contain wildcard resources or verbs.
-- Overly-Permissive Token: add +2.0 to Pod node risk when `automountServiceAccountToken` is true or absent.
-- Privileged Container: add +4.0 to Pod node risk when any container has `securityContext.privileged: true`.
-- Secret Snooping: add +3.0 to Role -> Secret edge weight when secrets get or list is granted without `resourceNames`.
-- Wire penalty metadata through [src/ingestion/kubectl_runner.py](src/ingestion/kubectl_runner.py) so [src/analysis/shortest_path.py](src/analysis/shortest_path.py) naturally reflects risk in `total_cost`.
-- Add targeted tests for each pattern in [test/test_kubectl_runner.py](test/test_kubectl_runner.py) and path-score impact checks in [test/test_shortest_path.py](test/test_shortest_path.py).
+2. Keep Phase 4 stable
+- Preserve regression coverage for attack-pattern penalties and node-risk enrichments in [test/test_kubectl_runner.py](test/test_kubectl_runner.py) and [test/test_shortest_path.py](test/test_shortest_path.py).
+- Keep vulnerable-vs-secure integration-style path checks passing in [test/test_shortest_path.py](test/test_shortest_path.py).
 
 3. Complete Phase 5 PDF deliverable
 - Implement [src/reporting/pdf_generator.py](src/reporting/pdf_generator.py).
