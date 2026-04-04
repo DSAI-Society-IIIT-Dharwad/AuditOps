@@ -1,18 +1,18 @@
 @import url("https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap");
 
 :root {
-  --bg: #041329;
-  --surface: #0d1c32;
-  --surface-2: #112036;
-  --surface-3: #1c2a41;
-  --line: #434656;
-  --text: #d6e3ff;
-  --muted: #c4c5d9;
-  --primary: #b8c3ff;
-  --accent: #ffb693;
-  --accent-strong: #fe6b00;
-  --danger: #ff6b7e;
-  --ok: #6ce8c1;
+  --bg: #06111d;
+  --surface: #0f1f2f;
+  --surface-2: #15283b;
+  --surface-3: #1e334a;
+  --line: #36516a;
+  --text: #e5f3ff;
+  --muted: #9eb8cb;
+  --primary: #79dbff;
+  --accent: #ffd08a;
+  --accent-strong: #ff9f40;
+  --danger: #ff7f92;
+  --ok: #70e6cb;
 }
 
 * {
@@ -31,9 +31,9 @@ body {
   font-family: "IBM Plex Sans", sans-serif;
   color: var(--text);
   background:
-    radial-gradient(circle at 15% -10%, rgba(46, 91, 255, 0.25), transparent 38%),
-    radial-gradient(circle at 95% 25%, rgba(254, 107, 0, 0.12), transparent 44%),
-    linear-gradient(160deg, #041329 0%, #010e24 100%);
+    radial-gradient(circle at 12% -10%, rgba(121, 219, 255, 0.22), transparent 40%),
+    radial-gradient(circle at 92% 24%, rgba(255, 159, 64, 0.16), transparent 42%),
+    linear-gradient(160deg, #06111d 0%, #020915 100%);
 }
 
 .app-shell {
@@ -89,17 +89,17 @@ body {
 }
 
 .nav-link.active {
-  color: #ffd4be;
-  border-color: rgba(255, 182, 147, 0.5);
-  background: rgba(254, 107, 0, 0.2);
+  color: #2d1d00;
+  border-color: rgba(255, 208, 138, 0.65);
+  background: rgba(255, 208, 138, 0.9);
 }
 
 .sidebar-action {
   margin-top: auto;
-  border: 1px solid rgba(254, 107, 0, 0.55);
+  border: 1px solid rgba(255, 208, 138, 0.68);
   border-radius: 12px;
-  background: linear-gradient(180deg, rgba(254, 107, 0, 0.25), rgba(122, 48, 0, 0.4));
-  color: #ffe4d7;
+  background: linear-gradient(180deg, rgba(255, 208, 138, 0.3), rgba(149, 95, 26, 0.45));
+  color: #fff5e6;
   padding: 12px;
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -282,9 +282,9 @@ button:disabled {
 
 .primary-action {
   margin-left: auto;
-  border-color: rgba(255, 182, 147, 0.5);
-  background: linear-gradient(180deg, rgba(254, 107, 0, 0.35), rgba(122, 48, 0, 0.35));
-  color: #ffe6d8;
+  border-color: rgba(121, 219, 255, 0.58);
+  background: linear-gradient(180deg, rgba(121, 219, 255, 0.35), rgba(33, 120, 166, 0.38));
+  color: #eaf8ff;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-family: "Sora", sans-serif;
@@ -323,13 +323,13 @@ select {
 .dashboard-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 420px;
-  gap: 10px;
+  gap: 12px;
   min-height: calc(100vh - 160px);
 }
 
 .graph-column {
-  display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
   min-width: 0;
 }
@@ -351,18 +351,18 @@ select {
 }
 
 .mode-pill.active {
-  color: #561f00;
+  color: #1b2838;
   background: var(--accent);
-  border-color: rgba(255, 182, 147, 0.8);
+  border-color: rgba(255, 208, 138, 0.85);
 }
 
 .threat-banner {
   border-left: 3px solid var(--accent-strong);
-  background: rgba(28, 42, 65, 0.85);
+  background: rgba(255, 159, 64, 0.12);
   padding: 10px 12px;
   border-radius: 6px;
   font-size: 12px;
-  color: #ffe0d1;
+  color: #ffe8c3;
 }
 
 .quick-metrics {
@@ -372,9 +372,9 @@ select {
 }
 
 .metric-card {
-  border: 1px solid rgba(67, 70, 86, 0.55);
+  border: 1px solid rgba(54, 81, 106, 0.6);
   border-radius: 10px;
-  background: rgba(28, 42, 65, 0.62);
+  background: rgba(21, 40, 59, 0.72);
   padding: 10px;
   display: grid;
   gap: 2px;
@@ -389,18 +389,18 @@ select {
 
 .metric-card strong {
   font-family: "Sora", sans-serif;
-  color: var(--text);
+  color: #d5f1ff;
   font-size: 24px;
 }
 
 .graph-shell {
-  min-height: 420px;
+  min-height: 0;
   overflow: hidden;
 }
 
 .path-hover-panel {
   padding: 10px;
-  background: rgba(13, 28, 50, 0.84);
+  background: rgba(15, 31, 47, 0.9);
   display: grid;
   gap: 8px;
 }
@@ -416,7 +416,7 @@ select {
 }
 
 .path-hover-panel-head strong {
-  color: #ffe4d5;
+  color: #ffe9c6;
   font-family: "Sora", sans-serif;
   letter-spacing: 0.1em;
   font-size: 11px;
@@ -425,16 +425,16 @@ select {
 .path-hover-list {
   display: grid;
   gap: 6px;
-  max-height: 204px;
+  max-height: 232px;
   overflow: auto;
   padding-right: 2px;
 }
 
 .path-hover-item {
   width: 100%;
-  border: 1px solid rgba(67, 70, 86, 0.58);
+  border: 1px solid rgba(54, 81, 106, 0.62);
   border-radius: 8px;
-  background: rgba(28, 42, 65, 0.5);
+  background: rgba(21, 40, 59, 0.65);
   padding: 8px;
   text-align: left;
   display: grid;
@@ -443,8 +443,8 @@ select {
 
 .path-hover-item:hover,
 .path-hover-item.active {
-  border-color: rgba(255, 226, 142, 0.75);
-  background: rgba(255, 226, 142, 0.14);
+  border-color: rgba(121, 219, 255, 0.82);
+  background: rgba(121, 219, 255, 0.16);
 }
 
 .path-hover-item-head {
@@ -459,7 +459,7 @@ select {
 
 .path-hover-item-route {
   font-size: 11px;
-  color: #f2f7ff;
+  color: #e7f4ff;
 }
 
 .graph-canvas-wrap {
@@ -468,7 +468,7 @@ select {
 
 .graph-canvas {
   width: 100%;
-  height: 520px;
+  height: clamp(340px, 44vh, 460px);
   background:
     radial-gradient(circle at 88% 8%, rgba(0, 229, 255, 0.08), transparent 34%),
     radial-gradient(circle at 14% 100%, rgba(255, 138, 87, 0.11), transparent 38%),
