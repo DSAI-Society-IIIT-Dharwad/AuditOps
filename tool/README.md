@@ -46,6 +46,39 @@ These are reflected naturally in shortest-path `risk_score` totals.
 uv sync
 ```
 
+## Phase 6 API (Backend Server)
+
+The FastAPI bridge used by the frontend is exposed from `src/api/app.py`.
+
+### Run API locally
+
+```bash
+uv run uvicorn api.app:app --app-dir src --host 0.0.0.0 --port 8000 --reload
+```
+
+### Verify API health
+
+```bash
+curl http://localhost:8000/health
+```
+
+Expected response:
+
+```json
+{"status":"ok"}
+```
+
+### Query graph-analysis endpoint
+
+```bash
+curl "http://localhost:8000/api/v1/graph-analysis?namespace=vulnerable-ns&include_cluster_rbac=true&max_hops=3&max_depth=8"
+```
+
+Common namespace checks:
+
+- `namespace=vulnerable-ns`
+- `namespace=secure-ns`
+
 Optional local cluster bootstrap:
 
 ```bash
@@ -64,10 +97,37 @@ uv run python src/main.py --ingestor kubectl --namespace vulnerable-ns --graph-o
 uv run python src/main.py --ingestor kubectl --namespace secure-ns --graph-out out/secure-graph.json --pdf-out out/secure-report.pdf
 ```
 
+### Namespace RBAC modes
+
+Strict namespace mode (exclude all ClusterRoleBinding-derived nodes):
+
+```bash
+uv run python src/main.py --ingestor kubectl --namespace vulnerable-ns --include-cluster-rbac false --graph-out out/vulnerable-strict.json
+```
+
+Hybrid mode (default when namespace is set):
+
+- `--include-cluster-rbac true`
+- Includes only ClusterRoleBindings that reference ServiceAccount subjects in the target namespace.
+
 ### Mock ingestion
 
 ```bash
 uv run python src/main.py --ingestor mock --mock-file mock-cluster-graph.json --graph-out out/mock-graph.json --pdf-out out/mock-report.pdf
+```
+
+### Generate expected sample report output
+
+Run from this `tool/` directory:
+
+```bash
+uv run python src/main.py --ingestor mock --mock-file mock-cluster-graph.json > actual-output.txt
+```
+
+Check parity against provided sample output:
+
+```bash
+cd .. && diff -u sample-output.txt actual-output.txt
 ```
 
 ### Replay from exported graph JSON
@@ -86,6 +146,7 @@ uv run python src/main.py --graph-in out/vulnerable-graph.json --pdf-out out/rep
 | `--graph-out` | `cluster-graph.json` | Output path for normalized graph JSON artifact. |
 | `--pdf-out` | `None` | Optional output path for PDF kill-chain report artifact. |
 | `--fallback-file` | `None` | Optional fallback JSON if kubectl ingestion fails. |
+| `--include-cluster-rbac` | `true` | Controls cluster RBAC expansion: `false` = strict namespace mode (exclude all ClusterRoleBindings), `true` = include cluster RBAC (hybrid-filtered when `--namespace` is set). |
 | `--source` | `None` | Override source node id. |
 | `--target` | `None` | Override target sink node id. |
 | `--namespace` | `None` | Namespace scope for kubectl ingestion and source/sink auto-selection. |
@@ -105,12 +166,26 @@ Run full test suite:
 uv run python -m unittest discover -s test -v
 ```
 
+Run API-specific tests:
+
+```bash
+uv run python -m unittest test/test_api/test_graph_analysis_api.py -v
+```
+
 Run focused reporting tests:
 
 ```bash
 uv run python -m unittest test/test_cli_formatter.py -v
 uv run python -m unittest test/test_pdf_generator.py -v
 uv run python -m unittest test/test_main_export.py -v
+```
+
+Run focused ingestion/graph compatibility tests:
+
+```bash
+uv run python -m unittest test/test_mock_parser.py -v
+uv run python -m unittest test/test_networkx_builder.py -v
+uv run python -m unittest test/test_kubectl_runner.py -v
 ```
 
 ## Key Paths
@@ -121,3 +196,25 @@ uv run python -m unittest test/test_main_export.py -v
 - Analysis: `src/analysis/*`
 - Reporting: `src/reporting/cli_formatter.py`, `src/reporting/pdf_generator.py`
 - Tests: `test/*`
+
+## End-to-End Local Run (Backend + Frontend)
+
+1. Terminal 1 (this folder):
+
+```bash
+uv sync
+uv run uvicorn api.app:app --app-dir src --host 0.0.0.0 --port 8000 --reload
+```
+
+2. Terminal 2 (`../frontend`):
+
+```bash
+npm install
+npm run dev
+```
+
+3. Open frontend app:
+
+- `http://localhost:5173`
+
+The Vite dev server proxies `/api` requests to `http://localhost:8000`.

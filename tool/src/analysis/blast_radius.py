@@ -55,7 +55,7 @@ def calculate_blast_radius(storage: GraphStorage, source_id: str, max_hops: int 
 			hops_by_node[neighbor] = next_hops
 			queue.append((neighbor, next_hops))
 
-	reachable = sorted(hops_by_node.keys(), key=lambda node_id: (hops_by_node[node_id], node_id))
+	reachable = list(hops_by_node.keys())
 	return BlastRadiusResult(
 		source=source_id,
 		max_hops=max_hops,

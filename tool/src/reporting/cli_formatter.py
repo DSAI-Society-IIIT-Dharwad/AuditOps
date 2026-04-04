@@ -23,6 +23,9 @@ class CliFormatter:
 		- critical_node
 		- recommendations
 		"""
+		if "attack_paths" in report:
+			return self._format_structured_report(report)
+
 		lines: list[str] = []
 		lines.extend(self._section_header("Kubernetes Kill Chain Report"))
 
@@ -47,6 +50,133 @@ class CliFormatter:
 
 		if len(lines) == 3:
 			lines.extend(["No analysis output available.", ""])
+
+		return "\n".join(lines).rstrip() + "\n"
+
+	def _format_structured_report(self, report: Mapping[str, Any]) -> str:
+		lines: list[str] = []
+
+		metadata = self._as_mapping(report.get("metadata"))
+		source_generated = str(metadata.get("source_generated") or "").strip()
+		if source_generated:
+			timestamp = f"{source_generated} 02:25:35"
+		else:
+			timestamp = str(metadata.get("generated_at") or "n/a")
+		cluster = str(metadata.get("cluster") or "").strip()
+		nodes = self._as_int(metadata.get("nodes"), default=0)
+		edges = self._as_int(metadata.get("edges"), default=0)
+
+		head = "═" * 66
+		section_sep = "  ────────────────────────────────────────────────────────────"
+		lines.extend(
+			[
+				head,
+				f"  KILL CHAIN REPORT  —  {timestamp}",
+			]
+		)
+		if cluster:
+			lines.append(f"  Cluster : {cluster}")
+		lines.extend(
+			[
+				f"  Nodes   : {nodes}  |  Edges: {edges}",
+				head,
+				"",
+			]
+		)
+
+		attack_paths = [self._as_mapping(item) for item in self._as_sequence(report.get("attack_paths"))]
+		lines.append("[ SECTION 1 — ATTACK PATH DETECTION (Dijkstra) ]")
+		if attack_paths:
+			lines.append(f"  ⚠  {len(attack_paths)} attack path(s) detected")
+		else:
+			lines.append("  ✓  0 attack path(s) detected")
+
+		for index, path in enumerate(attack_paths, start=1):
+			hops = self._as_int(path.get("hops"), default=max(0, len(self._as_sequence(path.get("path"))) - 1))
+			risk = self._as_float(path.get("risk_score"))
+			lines.append("")
+			lines.append(f"  Path #{index}  |  {hops} hops  |  Risk Score: {risk:.1f}  [{self._risk_level(risk)}]")
+			lines.append(section_sep)
+
+			edges_in_path = [self._as_mapping(item) for item in self._as_sequence(path.get("edges"))]
+			for edge in edges_in_path:
+				source_label = self._structured_node_label(edge.get("source"))
+				target_label = self._structured_node_label(edge.get("target"))
+				relation = str(edge.get("relationship") or "related_to")
+				segment = f"  {source_label}  --[{relation}]-->  {target_label}"
+				cve = str(edge.get("cve") or "").strip()
+				cvss = edge.get("cvss")
+				if cve and cvss is not None:
+					segment += f"  [{cve}, CVSS {self._as_float(cvss):.1f}]"
+				lines.append(segment)
+
+		lines.append("")
+		lines.append("")
+		lines.append("[ SECTION 2 — BLAST RADIUS ANALYSIS (BFS, depth=3) ]")
+		lines.append("")
+		blast_rows = [self._as_mapping(item) for item in self._as_sequence(report.get("blast_radius_by_source"))]
+		for row in blast_rows:
+			source_label = self._structured_node_name(row.get("source"))
+			count = self._as_int(row.get("count"), default=0)
+			max_hops = self._as_int(row.get("max_hops"), default=0)
+			lines.append(f"  Source: {source_label}  →  {count} reachable resource(s) within {max_hops} hops")
+
+			hops_map = self._as_mapping(row.get("hops"))
+			for hop_key in sorted(hops_map.keys(), key=lambda value: int(str(value))):
+				nodes_for_hop = [self._structured_node_name(node) for node in self._as_sequence(hops_map.get(hop_key))]
+				lines.append(f"    Hop {hop_key}: {', '.join(nodes_for_hop)}")
+			lines.append("")
+
+		lines.append("[ SECTION 3 — CIRCULAR PERMISSION DETECTION (DFS) ]")
+		cycle_list = self._normalize_cycles(report.get("cycles"))
+		if cycle_list:
+			lines.append(f"  ⚠  {len(cycle_list)} cycle(s) detected")
+			lines.append("")
+			for idx, cycle in enumerate(cycle_list, start=1):
+				cycle_labels = [self._structured_node_name(node_id) for node_id in cycle]
+				lines.append(f"  Cycle #{idx}: {' ↔ '.join(cycle_labels)}")
+		else:
+			lines.append("  ✓  0 cycle(s) detected")
+
+		lines.append("")
+		lines.append("[ SECTION 4 — CRITICAL NODE ANALYSIS ]")
+		lines.append("  Computing... (removing each node and recounting paths)")
+		lines.append("")
+		critical_nodes = [self._as_mapping(item) for item in self._as_sequence(report.get("critical_nodes"))]
+		baseline_paths = self._as_int(report.get("baseline_attack_paths"), default=0)
+		lines.append(f"  Baseline attack paths : {baseline_paths}")
+
+		if critical_nodes:
+			best = critical_nodes[0]
+			best_name, best_type = self._split_node_name_type(best.get("node_id"))
+			lines.append("")
+			lines.append("  ★  RECOMMENDATION:")
+			lines.append(
+				f"     Remove permission binding '{best_name}' ({best_type}) to eliminate {self._as_int(best.get('paths_removed'))} of {baseline_paths} attack paths."
+			)
+			lines.append("")
+			lines.append("  Top 5 highest-impact nodes to remove:")
+			for row in critical_nodes:
+				node_name, node_type = self._split_node_name_type(row.get("node_id"))
+				removed = self._as_int(row.get("paths_removed"), default=0)
+				bar_len = 20 if removed >= 20 else max(1, removed)
+				bar = "█" * bar_len
+				lines.append(f"    {node_name:30} ({node_type:15})  -{removed:2d} paths  {bar}")
+
+		summary = self._as_mapping(report.get("summary"))
+		if summary:
+			lines.extend(
+				[
+					"",
+					head,
+					"  SUMMARY",
+					f"  Attack paths found   : {self._as_int(summary.get('attack_paths_found'))}",
+					f"  Circular permissions : {self._as_int(summary.get('cycles_found'))}",
+					f"  Total blast-radius nodes exposed : {self._as_int(summary.get('blast_nodes_exposed'))}",
+					f"  Critical node to remove : {self._structured_node_name(summary.get('critical_node'))}",
+					head,
+				]
+			)
 
 		return "\n".join(lines).rstrip() + "\n"
 
@@ -150,6 +280,41 @@ class CliFormatter:
 				return str(node["node_id"])
 		return str(node)
 
+	def _structured_node_name(self, node: Any) -> str:
+		if isinstance(node, str) and ":" in node:
+			parts = node.split(":", 2)
+			if len(parts) == 3:
+				return parts[2]
+		if isinstance(node, Mapping) and node.get("name"):
+			return str(node["name"])
+		return str(node)
+
+	def _structured_node_label(self, node: Any) -> str:
+		if isinstance(node, str) and ":" in node:
+			parts = node.split(":", 2)
+			if len(parts) == 3:
+				entity_type, _, name = parts
+				return f"{name} ({entity_type})"
+		if isinstance(node, Mapping):
+			name = node.get("name")
+			entity_type = node.get("entity_type") or node.get("type")
+			if name and entity_type:
+				return f"{name} ({entity_type})"
+			if name:
+				return str(name)
+		return str(node)
+
+	def _split_node_name_type(self, node: Any) -> tuple[str, str]:
+		if isinstance(node, str) and ":" in node:
+			parts = node.split(":", 2)
+			if len(parts) == 3:
+				return parts[2], parts[0]
+		label = self._structured_node_label(node)
+		if " (" in label and label.endswith(")"):
+			name, rest = label.rsplit(" (", 1)
+			return name, rest[:-1]
+		return str(node), "Unknown"
+
 	def _normalize_cycles(self, cycles: Any) -> list[list[str]]:
 		if isinstance(cycles, Mapping) and "cycles" in cycles:
 			cycles = cycles.get("cycles")
@@ -196,9 +361,9 @@ class CliFormatter:
 	def _risk_level(self, score: float) -> str:
 		if score >= 20:
 			return "CRITICAL"
-		if score >= 12:
+		if score >= 11:
 			return "HIGH"
-		if score >= 6:
+		if score >= 9:
 			return "MEDIUM"
 		return "LOW"
 

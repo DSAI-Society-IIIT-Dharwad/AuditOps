@@ -97,3 +97,63 @@ This plan reflects current repository progress and the exact remaining work for 
 
 4. Tooling rule
 - Use uv for Python execution, dependency sync, and test commands.
+
+## Appendix: Phase 6 Two-Page Frontend Plan (Added 2026-04-04)
+
+This appendix defines the exact Phase 6 execution scope based on the provided design assets.
+
+### Scope Lock
+
+1. Frontend will have exactly 2 pages
+- Graph page
+- Risks page
+
+2. Design mapping
+- Graph page source: [../design/2nd one.html](../design/2nd%20one.html)
+- Risks page source: [../design/frontend_riskandalert.html](../design/frontend_riskandalert.html)
+
+3. Current frontend state
+- [../frontend](../frontend) is empty and will be initialized in this phase.
+
+### Phase 6 Deliverables
+
+1. FastAPI bridge (backend)
+- Add `GET /api/v1/graph-analysis?namespace=<ns>`.
+- Return one unified payload for both pages: context, summary, nodes, edges, and analysis blocks.
+- Keep schema backward-compatible and include clear error responses.
+
+2. Graph page implementation
+- Build the graph experience from [../design/2nd one.html](../design/2nd%20one.html).
+- Render directed graph (Cytoscape).
+- Add overlay toggles for attack path, blast radius, cycles, and critical node.
+- Add graph-oriented filters and node detail interactions.
+
+3. Risks page implementation
+- Build the risk dashboard from [../design/frontend_riskandalert.html](../design/frontend_riskandalert.html).
+- Render summary cards, critical-node panel, severity/risk sections, and recommendations.
+- Bind all values to the same API payload used by Graph page.
+
+4. Shared navigation and state
+- Route structure: `/graph` and `/risks`.
+- Persist selected namespace and filters while moving between pages.
+
+5. Documentation updates
+- Add Phase 6 run instructions and API usage to [README.md](README.md).
+
+### Implementation Sequence
+
+1. Build API contract service and endpoint first.
+2. Scaffold frontend app with two routes.
+3. Implement Graph page (design fidelity + live data).
+4. Implement Risks page (design fidelity + live data).
+5. Add shared filters/state and page-to-page continuity.
+6. Validate secure/vulnerable namespace behavior and finalize docs.
+
+### Verification Checklist
+
+1. API returns valid payload for both `vulnerable-ns` and `secure-ns`.
+2. Graph page renders nodes/edges and overlay toggles from live API output.
+3. Risks page renders risk cards, critical node details, and recommendations from the same output.
+4. Secure namespace shows no attack path while still rendering graph and risk summary.
+5. Vulnerable namespace shows critical path and elevated risk indicators.
+6. Existing backend tests remain green.

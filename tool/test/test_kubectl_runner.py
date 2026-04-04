@@ -213,6 +213,75 @@ class TestBuildClusterGraphData(unittest.TestCase):
 			places=3,
 		)
 
+	def test_strict_mode_excludes_all_clusterrolebindings(self) -> None:
+		payload = {
+			"pods": {"items": []},
+			"serviceaccounts": {"items": []},
+			"roles": {"items": []},
+			"rolebindings": {"items": []},
+			"clusterrolebindings": {
+				"items": [
+					{
+						"metadata": {"name": "crb-a"},
+						"roleRef": {"kind": "ClusterRole", "name": "cluster-admin"},
+						"subjects": [
+							{"kind": "ServiceAccount", "name": "sa-a", "namespace": "ns-a"},
+						],
+					}
+				]
+			},
+			"secrets": {"items": []},
+			"configmaps": {"items": []},
+		}
+
+		graph = build_cluster_graph_data(payload, namespace_scope="ns-a", include_cluster_rbac=False)
+		node_ids = {node.node_id for node in graph.nodes}
+
+		self.assertNotIn("ClusterRoleBinding:cluster:crb-a", node_ids)
+		self.assertNotIn("ClusterRole:cluster:cluster-admin", node_ids)
+
+	def test_hybrid_mode_includes_only_namespace_referenced_clusterrolebindings(self) -> None:
+		payload = {
+			"pods": {"items": []},
+			"serviceaccounts": {"items": []},
+			"roles": {"items": []},
+			"rolebindings": {"items": []},
+			"clusterrolebindings": {
+				"items": [
+					{
+						"metadata": {"name": "include-me"},
+						"roleRef": {"kind": "ClusterRole", "name": "cluster-admin"},
+						"subjects": [
+							{"kind": "ServiceAccount", "name": "sa-a", "namespace": "ns-a"},
+						],
+					},
+					{
+						"metadata": {"name": "exclude-other-ns"},
+						"roleRef": {"kind": "ClusterRole", "name": "system:discovery"},
+						"subjects": [
+							{"kind": "ServiceAccount", "name": "sa-b", "namespace": "ns-b"},
+						],
+					},
+					{
+						"metadata": {"name": "exclude-group-only"},
+						"roleRef": {"kind": "ClusterRole", "name": "system:public-info-viewer"},
+						"subjects": [{"kind": "Group", "name": "system:authenticated"}],
+					},
+				]
+			},
+			"secrets": {"items": []},
+			"configmaps": {"items": []},
+		}
+
+		graph = build_cluster_graph_data(payload, namespace_scope="ns-a", include_cluster_rbac=True)
+		node_ids = {node.node_id for node in graph.nodes}
+
+		self.assertIn("ClusterRoleBinding:cluster:include-me", node_ids)
+		self.assertIn("ClusterRole:cluster:cluster-admin", node_ids)
+		self.assertIn("ServiceAccount:ns-a:sa-a", node_ids)
+		self.assertNotIn("ClusterRoleBinding:cluster:exclude-other-ns", node_ids)
+		self.assertNotIn("ClusterRoleBinding:cluster:exclude-group-only", node_ids)
+
 
 class TestKubectlDataIngestor(unittest.TestCase):
 	@patch("ingestion.kubectl_runner.subprocess.run")
@@ -227,6 +296,36 @@ class TestKubectlDataIngestor(unittest.TestCase):
 
 		result = ingestor._run_kubectl_get("pods")
 		self.assertEqual(result, {"items": []})
+
+	@patch("ingestion.kubectl_runner.subprocess.run")
+	def test_run_kubectl_get_cluster_scoped_resource_ignores_namespace(self, run_mock) -> None:
+		run_mock.return_value = subprocess.CompletedProcess(
+			args=["kubectl"],
+			returncode=0,
+			stdout='{"items": []}',
+			stderr="",
+		)
+		ingestor = KubectlDataIngestor(namespace="demo")
+
+		result = ingestor._run_kubectl_get("clusterrolebindings")
+		self.assertEqual(result, {"items": []})
+		run_mock.assert_called_once_with(
+			["kubectl", "get", "clusterrolebindings", "-o", "json"],
+			check=True,
+			text=True,
+			capture_output=True,
+		)
+
+	def test_ingest_skips_clusterrolebindings_when_flag_disabled(self) -> None:
+		ingestor = KubectlDataIngestor(namespace="demo", include_cluster_rbac=False)
+
+		with patch.object(ingestor, "_run_kubectl_get", return_value={"items": []}) as run_mock:
+			graph = ingestor.ingest()
+
+		called_resources = [call.args[0] for call in run_mock.call_args_list]
+		self.assertNotIn("clusterrolebindings", called_resources)
+		self.assertEqual(graph.nodes, [])
+		self.assertEqual(graph.edges, [])
 
 	@patch("ingestion.kubectl_runner.subprocess.run", side_effect=FileNotFoundError())
 	def test_run_kubectl_get_missing_binary(self, _run_mock) -> None:

@@ -60,6 +60,58 @@ class TestCliFormatter(unittest.TestCase):
 		text = render_cli_report({})
 		self.assertIn("✓ No Attack Path Detected", text)
 
+	def test_formats_structured_report_shape(self) -> None:
+		report = {
+			"metadata": {"generated_at": "2026-04-04 12:00:00", "nodes": 4, "edges": 3},
+			"attack_paths": [
+				{
+					"hops": 2,
+					"risk_score": 11.5,
+					"path": ["User:default:dev-1", "Pod:default:web", "Secret:default:db"],
+					"edges": [
+						{
+							"source": "User:default:dev-1",
+							"target": "Pod:default:web",
+							"relationship": "can-exec",
+							"cve": "CVE-2026-1000",
+							"cvss": 8.1,
+						},
+						{
+							"source": "Pod:default:web",
+							"target": "Secret:default:db",
+							"relationship": "can-read",
+						},
+					],
+				}
+			],
+			"blast_radius_by_source": [
+				{
+					"source": "User:default:dev-1",
+					"count": 2,
+					"max_hops": 2,
+					"hops": {"1": ["Pod:default:web"], "2": ["Secret:default:db"]},
+				}
+			],
+			"cycles": [["A", "B", "A"]],
+			"baseline_attack_paths": 3,
+			"critical_nodes": [
+				{"node_id": "Pod:default:web", "paths_removed": 2},
+			],
+			"summary": {
+				"attack_paths_found": 1,
+				"cycles_found": 1,
+				"blast_nodes_exposed": 2,
+				"critical_node": "Pod:default:web",
+			},
+		}
+
+		text = CliFormatter().format_report(report)
+		self.assertIn("[ SECTION 1 — ATTACK PATH DETECTION (Dijkstra) ]", text)
+		self.assertIn("Path #1", text)
+		self.assertIn("[ SECTION 2 — BLAST RADIUS ANALYSIS (BFS, depth=3) ]", text)
+		self.assertIn("[ SECTION 4 — CRITICAL NODE ANALYSIS ]", text)
+		self.assertIn("SUMMARY", text)
+
 
 if __name__ == "__main__":
 	unittest.main()

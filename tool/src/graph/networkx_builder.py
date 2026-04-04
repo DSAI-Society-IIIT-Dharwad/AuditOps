@@ -117,15 +117,25 @@ class NetworkXGraphStorage(GraphStorage):
 			}
 			for node in self.all_nodes()
 		]
-		edge_rows = [
-			{
+		edge_rows = []
+		for edge in self.all_edges():
+			row: dict[str, Any] = {
 				"source_id": edge.source_id,
 				"target_id": edge.target_id,
 				"relationship_type": edge.relationship_type,
 				"weight": edge.weight,
 			}
-			for edge in self.all_edges()
-		]
+			if edge.source_ref is not None:
+				row["source_ref"] = edge.source_ref
+			if edge.target_ref is not None:
+				row["target_ref"] = edge.target_ref
+			if edge.cve is not None:
+				row["cve"] = edge.cve
+			if edge.cvss is not None:
+				row["cvss"] = edge.cvss
+			if edge.escalation_type is not None:
+				row["escalation_type"] = edge.escalation_type
+			edge_rows.append(row)
 
 		node_rows.sort(key=lambda row: str(row["node_id"]))
 		edge_rows.sort(key=lambda row: (str(row["source_id"]), str(row["target_id"]), str(row["relationship_type"])))
@@ -173,17 +183,23 @@ class NetworkXGraphStorage(GraphStorage):
 			raise ValueError("graph artifact must include list fields: nodes, edges")
 
 		nodes: list[Node] = []
+		alias_to_node_id: dict[str, str] = {}
 		for row in node_rows:
 			if not isinstance(row, dict):
 				raise ValueError("each node entry must be an object")
 			node = _node_from_export_row(row)
 			nodes.append(node)
+			for alias in _node_aliases_from_row(row, node):
+				alias_to_node_id[alias] = node.node_id
 
 		edges: list[Edge] = []
 		for row in edge_rows:
 			if not isinstance(row, dict):
 				raise ValueError("each edge entry must be an object")
-			edges.append(_edge_from_export_row(row))
+			edge = _edge_from_export_row(row, alias_to_node_id)
+			if edge is None:
+				continue
+			edges.append(edge)
 
 		return cls.from_cluster_graph_data(ClusterGraphData(nodes=nodes, edges=edges))
 
@@ -200,24 +216,59 @@ class NetworkXGraphStorage(GraphStorage):
 
 def _node_from_export_row(row: dict[str, Any]) -> Node:
 	node = Node(
-		entity_type=str(row.get("entity_type") or row.get("entityType") or "").strip(),
+		entity_type=str(row.get("entity_type") or row.get("entityType") or row.get("type") or "").strip(),
 		name=str(row.get("name") or "").strip(),
 		namespace=str(row.get("namespace") or "default").strip() or "default",
 		risk_score=float(row.get("risk_score", row.get("riskScore", 0.0))),
 		is_source=bool(row.get("is_source", row.get("isSource", False))),
 		is_sink=bool(row.get("is_sink", row.get("isSink", False))),
 	)
-	provided_id = row.get("node_id") or row.get("nodeId")
-	if provided_id and str(provided_id) != node.node_id:
-		raise ValueError(f"node_id mismatch: expected {node.node_id}, got {provided_id}")
 	return node
 
 
-def _edge_from_export_row(row: dict[str, Any]) -> Edge:
+def _node_aliases_from_row(row: dict[str, Any], node: Node) -> set[str]:
+	aliases = {node.node_id}
+	for key in ("id", "node_id", "nodeId"):
+		value = str(row.get(key) or "").strip()
+		if value:
+			aliases.add(value)
+	return aliases
+
+
+def _edge_from_export_row(row: dict[str, Any], alias_to_node_id: dict[str, str]) -> Edge | None:
+	source_ref = str(
+		row.get("source_id")
+		or row.get("sourceNodeId")
+		or row.get("source_node_id")
+		or row.get("source")
+		or ""
+	).strip()
+	target_ref = str(
+		row.get("target_id")
+		or row.get("targetNodeId")
+		or row.get("target_node_id")
+		or row.get("target")
+		or ""
+	).strip()
+	relationship_type = str(row.get("relationship_type") or row.get("relationshipType") or row.get("relationship") or "").strip()
+
+	if not source_ref and not target_ref and not relationship_type and row.get("comment"):
+		return None
+
+	source_id = alias_to_node_id.get(source_ref, source_ref)
+	target_id = alias_to_node_id.get(target_ref, target_ref)
+	source_ref_meta = str(row.get("source_ref") or "").strip() or None
+	target_ref_meta = str(row.get("target_ref") or "").strip() or None
+
 	return Edge(
-		source_id=str(row.get("source_id") or row.get("sourceNodeId") or row.get("source_node_id") or "").strip(),
-		target_id=str(row.get("target_id") or row.get("targetNodeId") or row.get("target_node_id") or "").strip(),
-		relationship_type=str(row.get("relationship_type") or row.get("relationshipType") or "").strip(),
+		source_id=source_id,
+		target_id=target_id,
+		relationship_type=relationship_type,
 		weight=float(row.get("weight", 1.0)),
+		source_ref=source_ref_meta or (source_ref if source_ref and source_ref != source_id else None),
+		target_ref=target_ref_meta or (target_ref if target_ref and target_ref != target_id else None),
+		cve=str(row.get("cve") or "").strip() or None,
+		cvss=float(row["cvss"]) if row.get("cvss") is not None else None,
+		escalation_type=str(row.get("escalation_type") or row.get("escalationType") or "").strip() or None,
 	)
 

@@ -22,6 +22,10 @@ _RESOURCE_ORDER = (
 	"configmaps",
 )
 
+_CLUSTER_SCOPED_RESOURCES = {
+	"clusterrolebindings",
+}
+
 _BASE_RISK_BY_KIND: dict[str, float] = {
 	"Pod": 5.0,
 	"ServiceAccount": 6.0,
@@ -43,7 +47,12 @@ class KubectlIngestError(RuntimeError):
 	"""Raised when live cluster data cannot be retrieved or parsed."""
 
 
-def build_cluster_graph_data(kube_payload: Mapping[str, Any]) -> ClusterGraphData:
+def build_cluster_graph_data(
+	kube_payload: Mapping[str, Any],
+	*,
+	namespace_scope: str | None = None,
+	include_cluster_rbac: bool = True,
+) -> ClusterGraphData:
 	"""Normalize Kubernetes resource payloads into Node and Edge objects."""
 	nodes_by_id: dict[str, Node] = {}
 	edges: list[Edge] = []
@@ -179,35 +188,36 @@ def build_cluster_graph_data(kube_payload: Mapping[str, Any]) -> ClusterGraphDat
 			)
 		)
 
-	for item in _safe_items(kube_payload.get("clusterrolebindings")):
-		binding_name, _ = _metadata_name_ns(item)
-		role_ref = item.get("roleRef", {})
-		role_name = str(role_ref.get("name") or "unknown")
-		role = _make_node("ClusterRole", role_name, "cluster")
-		add_node(role)
+	if include_cluster_rbac:
+		for item in _iter_clusterrolebinding_items(kube_payload, namespace_scope):
+			binding_name, _ = _metadata_name_ns(item)
+			role_ref = item.get("roleRef", {})
+			role_name = str(role_ref.get("name") or "unknown")
+			role = _make_node("ClusterRole", role_name, "cluster")
+			add_node(role)
 
-		for subject in item.get("subjects", []) or []:
-			subject_node = _subject_to_node(subject, fallback_namespace="default")
-			add_node(subject_node)
+			for subject in item.get("subjects", []) or []:
+				subject_node = _subject_to_node(subject, fallback_namespace="default")
+				add_node(subject_node)
+				add_edge(
+					Edge(
+						source_id=subject_node.node_id,
+						target_id=role.node_id,
+						relationship_type="bound_to",
+						weight=2.6,
+					)
+				)
+
+			binding_node = _make_node("ClusterRoleBinding", binding_name, "cluster", risk_score=4.0)
+			add_node(binding_node)
 			add_edge(
 				Edge(
-					source_id=subject_node.node_id,
+					source_id=binding_node.node_id,
 					target_id=role.node_id,
-					relationship_type="bound_to",
-					weight=2.6,
+					relationship_type="grants",
+					weight=1.0,
 				)
 			)
-
-		binding_node = _make_node("ClusterRoleBinding", binding_name, "cluster", risk_score=4.0)
-		add_node(binding_node)
-		add_edge(
-			Edge(
-				source_id=binding_node.node_id,
-				target_id=role.node_id,
-				relationship_type="grants",
-				weight=1.0,
-			)
-		)
 
 	return ClusterGraphData(nodes=list(nodes_by_id.values()), edges=_dedupe_edges(edges))
 
@@ -220,9 +230,11 @@ class KubectlDataIngestor(DataIngestor):
 		fallback_file: str | Path | None = None,
 		*,
 		namespace: str | None = None,
+		include_cluster_rbac: bool = True,
 	) -> None:
 		self._fallback_file = Path(fallback_file) if fallback_file else None
 		self._namespace = namespace
+		self._include_cluster_rbac = include_cluster_rbac
 
 	def source_name(self) -> str:
 		return "kubectl"
@@ -231,8 +243,15 @@ class KubectlDataIngestor(DataIngestor):
 		payload: dict[str, Any] = {}
 		try:
 			for resource in _RESOURCE_ORDER:
+				if resource == "clusterrolebindings" and not self._include_cluster_rbac:
+					payload[resource] = {"items": []}
+					continue
 				payload[resource] = self._run_kubectl_get(resource)
-			return build_cluster_graph_data(payload)
+			return build_cluster_graph_data(
+				payload,
+				namespace_scope=self._namespace,
+				include_cluster_rbac=self._include_cluster_rbac,
+			)
 		except KubectlIngestError:
 			if self._fallback_file is None:
 				raise
@@ -244,10 +263,16 @@ class KubectlDataIngestor(DataIngestor):
 				fallback_payload = json.load(fp)
 			if not isinstance(fallback_payload, Mapping):
 				raise KubectlIngestError("fallback JSON must be an object at top-level")
-			return build_cluster_graph_data(fallback_payload)
+			return build_cluster_graph_data(
+				fallback_payload,
+				namespace_scope=self._namespace,
+				include_cluster_rbac=self._include_cluster_rbac,
+			)
 
 	def _run_kubectl_get(self, resource: str) -> dict[str, Any]:
-		if self._namespace:
+		if resource in _CLUSTER_SCOPED_RESOURCES:
+			cmd = ["kubectl", "get", resource, "-o", "json"]
+		elif self._namespace:
 			cmd = ["kubectl", "get", resource, "-n", self._namespace, "-o", "json"]
 		else:
 			cmd = ["kubectl", "get", resource, "-A", "-o", "json"]
@@ -313,6 +338,30 @@ def _safe_items(payload: Any) -> list[dict[str, Any]]:
 	if not isinstance(items, list):
 		return []
 	return [x for x in items if isinstance(x, dict)]
+
+
+def _iter_clusterrolebinding_items(kube_payload: Mapping[str, Any], namespace_scope: str | None) -> list[dict[str, Any]]:
+	items = _safe_items(kube_payload.get("clusterrolebindings"))
+	if namespace_scope is None:
+		return items
+	return [item for item in items if _clusterrolebinding_matches_namespace(item, namespace_scope)]
+
+
+def _clusterrolebinding_matches_namespace(item: Mapping[str, Any], namespace_scope: str) -> bool:
+	subjects = item.get("subjects", [])
+	if not isinstance(subjects, list):
+		return False
+
+	for subject in subjects:
+		if not isinstance(subject, Mapping):
+			continue
+		if str(subject.get("kind") or "") != "ServiceAccount":
+			continue
+		subject_namespace = str(subject.get("namespace") or "")
+		if subject_namespace == namespace_scope:
+			return True
+
+	return False
 
 
 def _is_public_entrypoint(pod: Mapping[str, Any]) -> bool:

@@ -132,6 +132,8 @@ class TestNetworkXGraphStorage(unittest.TestCase):
 			target_id=target.node_id,
 			relationship_type="can_read",
 			weight=4.4,
+			cve="CVE-2026-0001",
+			cvss=9.1,
 		)
 
 		storage = NetworkXGraphStorage()
@@ -148,8 +150,8 @@ class TestNetworkXGraphStorage(unittest.TestCase):
 			{(n.node_id, n.risk_score, n.is_source, n.is_sink) for n in loaded.all_nodes()},
 		)
 		self.assertEqual(
-			{(e.source_id, e.target_id, e.relationship_type, e.weight) for e in storage.all_edges()},
-			{(e.source_id, e.target_id, e.relationship_type, e.weight) for e in loaded.all_edges()},
+			{(e.source_id, e.target_id, e.relationship_type, e.weight, e.cve, e.cvss) for e in storage.all_edges()},
+			{(e.source_id, e.target_id, e.relationship_type, e.weight, e.cve, e.cvss) for e in loaded.all_edges()},
 		)
 
 	def test_from_exported_json_keeps_cycles(self) -> None:
@@ -195,28 +197,48 @@ class TestNetworkXGraphStorage(unittest.TestCase):
 		self.assertFalse(loaded.is_dag())
 		self.assertEqual(len(loaded.all_edges()), 2)
 
-	def test_from_json_file_rejects_node_id_mismatch(self) -> None:
+	def test_from_json_file_accepts_alias_node_ids_and_maps_edges(self) -> None:
 		payload = {
 			"schema_version": "1.0.0",
 			"nodes": [
 				{
-					"node_id": "Pod:default:wrong",
-					"entity_type": "Pod",
+					"id": "pod-webfront",
+					"type": "Pod",
 					"name": "web",
 					"namespace": "default",
 					"risk_score": 1.0,
-					"is_source": False,
+					"is_source": True,
 					"is_sink": False,
+				},
+				{
+					"id": "secret-db",
+					"type": "Secret",
+					"name": "db-creds",
+					"namespace": "default",
+					"risk_score": 9.0,
+					"is_source": False,
+					"is_sink": True,
 				}
 			],
-			"edges": [],
+			"edges": [
+				{
+					"source": "pod-webfront",
+					"target": "secret-db",
+					"relationship": "can-read",
+					"weight": 2.0,
+				}
+			],
 		}
 
 		with tempfile.TemporaryDirectory() as tmp_dir:
 			artifact = Path(tmp_dir) / "cluster-graph.json"
 			artifact.write_text(json.dumps(payload), encoding="utf-8")
-			with self.assertRaises(ValueError):
-				NetworkXGraphStorage.from_json_file(artifact)
+			loaded = NetworkXGraphStorage.from_json_file(artifact)
+
+		edges = loaded.all_edges()
+		self.assertEqual(len(edges), 1)
+		self.assertEqual(edges[0].source_id, "Pod:default:web")
+		self.assertEqual(edges[0].target_id, "Secret:default:db-creds")
 
 
 if __name__ == "__main__":

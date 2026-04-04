@@ -1,0 +1,188 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ultimate-attack-test
+---
+# ---------------------------------------------------------
+# THE CROWN JEWEL
+# ---------------------------------------------------------
+apiVersion: v1
+kind: Secret
+metadata:
+  name: crown-jewel-db
+  namespace: ultimate-attack-test
+type: Opaque
+data:
+  password: c3VwZXJzZWNyZXRwYXNzd29yZA== 
+
+---
+# ---------------------------------------------------------
+# PATTERN 1: "GOD MODE" + PRIVILEGED + TOKEN AUTOMOUNT
+# This pod is highly exploitable and has absolute cluster control.
+# ---------------------------------------------------------
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: god-mode-sa
+  namespace: ultimate-attack-test
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: god-mode-role
+  namespace: ultimate-attack-test
+rules:
+- apiGroups: ["*"]      # THE WILDCARD VULNERABILITY
+  resources: ["*"]
+  verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: god-mode-binding
+  namespace: ultimate-attack-test
+subjects:
+- kind: ServiceAccount
+  name: god-mode-sa
+  namespace: ultimate-attack-test
+roleRef:
+  kind: Role
+  name: god-mode-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: doom-pod
+  namespace: ultimate-attack-test
+  annotations:
+    security.analysis/cvss: "10.0" # Critical base vulnerability
+spec:
+  serviceAccountName: god-mode-sa
+  automountServiceAccountToken: true # OVERLY PERMISSIVE TOKEN
+  containers:
+  - name: root-shell
+    image: ubuntu:latest
+    securityContext:
+      privileged: true # PRIVILEGED CONTAINER VULNERABILITY
+
+---
+# ---------------------------------------------------------
+# PATTERN 2: SECRET SNOOPING
+# This pod doesn't have God Mode, but it can read ALL secrets.
+# ---------------------------------------------------------
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: snooper-sa
+  namespace: ultimate-attack-test
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: snooper-role
+  namespace: ultimate-attack-test
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list"] 
+  # VULNERABILITY: Missing 'resourceNames'. It can read everything.
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: snooper-binding
+  namespace: ultimate-attack-test
+subjects:
+- kind: ServiceAccount
+  name: snooper-sa
+  namespace: ultimate-attack-test
+roleRef:
+  kind: Role
+  name: snooper-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: snooper-pod
+  namespace: ultimate-attack-test
+  annotations:
+    security.analysis/cvss: "7.5" 
+spec:
+  serviceAccountName: snooper-sa
+  containers:
+  - name: web
+    image: nginx:1.14.2
+
+---
+# ---------------------------------------------------------
+# PATTERN 3: CIRCULAR DEPENDENCY (DFS CYCLE TEST)
+# Service A can modify Service B's account, and vice versa.
+# ---------------------------------------------------------
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: service-a-sa
+  namespace: ultimate-attack-test
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: service-b-sa
+  namespace: ultimate-attack-test
+---
+# Role giving power over Service B
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: manage-b-role
+  namespace: ultimate-attack-test
+rules:
+- apiGroups: [""]
+  resources: ["serviceaccounts"]
+  resourceNames: ["service-b-sa"]
+  verbs: ["patch", "update"]
+---
+# Role giving power over Service A
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: manage-a-role
+  namespace: ultimate-attack-test
+rules:
+- apiGroups: [""]
+  resources: ["serviceaccounts"]
+  resourceNames: ["service-a-sa"]
+  verbs: ["patch", "update"]
+---
+# Bind Service A to manage Service B
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: service-a-binding
+  namespace: ultimate-attack-test
+subjects:
+- kind: ServiceAccount
+  name: service-a-sa
+  namespace: ultimate-attack-test
+roleRef:
+  kind: Role
+  name: manage-b-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# Bind Service B to manage Service A (CREATES THE CYCLE)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: service-b-binding
+  namespace: ultimate-attack-test
+subjects:
+- kind: ServiceAccount
+  name: service-b-sa
+  namespace: ultimate-attack-test
+roleRef:
+  kind: Role
+  name: manage-a-role
+  apiGroup: rbac.authorization.k8s.io

@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 import json
 from pathlib import Path
 import sys
 from typing import Any
 
+import networkx as nx
+
 from analysis.blast_radius import calculate_blast_radius
 from analysis.critical_node import identify_critical_node
 from analysis.cycle_detect import detect_cycles
 from analysis.shortest_path import dijkstra_shortest_path
-from core.models import ClusterGraphData
+from core.models import ClusterGraphData, Edge
 from graph.networkx_builder import NetworkXGraphStorage
 from ingestion.kubectl_runner import KubectlDataIngestor
 from ingestion.mock_parser import MockDataIngestor
@@ -27,7 +30,11 @@ def main() -> int:
         if args.ingestor == "mock":
             ingestor = MockDataIngestor(file_path=args.mock_file)
         else:
-            ingestor = KubectlDataIngestor(fallback_file=args.fallback_file, namespace=args.namespace)
+            ingestor = KubectlDataIngestor(
+                fallback_file=args.fallback_file,
+                namespace=args.namespace,
+                include_cluster_rbac=_parse_bool_flag(args.include_cluster_rbac),
+            )
 
         graph_data = ingestor.ingest()
         storage = NetworkXGraphStorage.from_cluster_graph_data(graph_data)
@@ -35,19 +42,53 @@ def main() -> int:
     _export_graph_data(graph_data, args.graph_out)
 
     source_id = _resolve_source_id(storage, args.source, namespace=args.namespace)
+    source_ids = _resolve_source_ids(storage, args.source, namespace=args.namespace)
     sink_ids = _resolve_sink_ids(storage, args.target, namespace=args.namespace)
 
     attack_path_result = _find_best_attack_path(storage, source_id, sink_ids)
-    blast_result = calculate_blast_radius(storage, source_id=source_id, max_hops=args.max_hops)
-    cycles = detect_cycles(storage)
-    critical_result = identify_critical_node(
+    all_attack_paths = _enumerate_attack_paths(
         storage,
-        source_ids=[source_id],
+        source_ids=source_ids,
         sink_ids=sink_ids,
         max_depth=args.max_depth,
     )
+    attack_paths = _enumerate_best_attack_paths(storage, source_ids=source_ids, sink_ids=sink_ids)[:18]
+    blast_result = calculate_blast_radius(storage, source_id=source_id, max_hops=args.max_hops)
+    blast_radius_by_source = _calculate_blast_radius_by_source(storage, source_ids=source_ids, max_hops=args.max_hops)
+    cycles = detect_cycles(storage)
+    critical_result = identify_critical_node(
+        storage,
+        source_ids=source_ids,
+        sink_ids=sink_ids,
+        max_depth=args.max_depth,
+    )
+    critical_nodes = _rank_critical_nodes_from_paths(
+        all_attack_paths,
+        source_ids=source_ids,
+        sink_ids=sink_ids,
+        top_n=5,
+    )
+
+    metadata = {
+        "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "nodes": len(storage.all_nodes()),
+        "edges": len(storage.all_edges()),
+    }
+    metadata.update(_load_mock_metadata_if_available(args.ingestor, args.mock_file))
+    total_blast_exposed = sum(int(row.get("count", 0)) for row in blast_radius_by_source)
 
     report = {
+        "metadata": metadata,
+        "attack_paths": attack_paths,
+        "blast_radius_by_source": blast_radius_by_source,
+        "baseline_attack_paths": len(all_attack_paths),
+        "critical_nodes": critical_nodes,
+        "summary": {
+            "attack_paths_found": len(attack_paths),
+            "cycles_found": len(cycles),
+            "blast_nodes_exposed": total_blast_exposed,
+            "critical_node": critical_nodes[0]["node_id"] if critical_nodes else "none",
+        },
         "attack_path": attack_path_result.to_dict() if attack_path_result is not None else {
             "source": source_id,
             "target": sink_ids[0] if sink_ids else "unknown-target",
@@ -92,6 +133,15 @@ def _parse_args() -> argparse.Namespace:
         "--fallback-file",
         default=None,
         help="Optional fallback JSON if kubectl ingestion fails",
+    )
+    parser.add_argument(
+        "--include-cluster-rbac",
+        choices=("true", "false"),
+        default="true",
+        help=(
+            "Include cluster-level RBAC nodes. true: include cluster role bindings "
+            "(hybrid-filtered when --namespace is set). false: strict namespace mode."
+        ),
     )
     parser.add_argument("--source", default=None, help="Override source node_id")
     parser.add_argument("--target", default=None, help="Override target sink node_id")
@@ -149,6 +199,18 @@ def _resolve_sink_ids(storage: NetworkXGraphStorage, explicit_target: str | None
     return sorted(fallback)
 
 
+def _resolve_source_ids(storage: NetworkXGraphStorage, explicit_source: str | None, *, namespace: str | None) -> list[str]:
+    if explicit_source:
+        return [_resolve_source_id(storage, explicit_source, namespace=namespace)]
+
+    nodes = _nodes_in_scope(storage, namespace)
+    flagged = [node.node_id for node in nodes if node.is_source]
+    if flagged:
+        return flagged
+
+    return [_resolve_source_id(storage, explicit_source, namespace=namespace)]
+
+
 def _nodes_in_scope(storage: NetworkXGraphStorage, namespace: str | None):
     if not namespace:
         return storage.all_nodes()
@@ -169,6 +231,223 @@ def _find_best_attack_path(storage: NetworkXGraphStorage, source_id: str, sink_i
         if best is None or path_result.total_cost < best.total_cost:
             best = path_result
     return best
+
+
+def _enumerate_attack_paths(
+    storage: NetworkXGraphStorage,
+    *,
+    source_ids: list[str],
+    sink_ids: list[str],
+    max_depth: int,
+    max_paths: int = 200,
+) -> list[dict[str, Any]]:
+    if max_depth < 1:
+        return []
+
+    graph = storage.raw_graph()
+    paths: list[dict[str, Any]] = []
+
+    for source_id in sorted(set(source_ids)):
+        if not graph.has_node(source_id):
+            continue
+        for sink_id in sorted(set(sink_ids)):
+            if source_id == sink_id or not graph.has_node(sink_id):
+                continue
+
+            try:
+                for path_nodes in nx.all_simple_paths(graph, source=source_id, target=sink_id, cutoff=max_depth):
+                    if len(path_nodes) < 2:
+                        continue
+                    paths.append(_build_path_record(storage, path_nodes))
+                    if len(paths) >= max_paths:
+                        return _sort_attack_paths(paths)
+            except (nx.NetworkXNoPath, nx.NodeNotFound):
+                continue
+
+    return _sort_attack_paths(paths)
+
+
+def _enumerate_best_attack_paths(
+    storage: NetworkXGraphStorage,
+    *,
+    source_ids: list[str],
+    sink_ids: list[str],
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for source_id in sorted(set(source_ids)):
+        for sink_id in sorted(set(sink_ids)):
+            if source_id == sink_id:
+                continue
+            result = dijkstra_shortest_path(
+                storage,
+                source_id,
+                sink_id,
+                include_node_risk=False,
+            )
+            if result is None:
+                continue
+            rows.append(_build_path_record(storage, result.path, total_cost_override=result.total_cost))
+
+    return _sort_attack_paths(rows)
+
+
+def _build_path_record(
+    storage: NetworkXGraphStorage,
+    path_nodes: list[str],
+    *,
+    total_cost_override: float | None = None,
+) -> dict[str, Any]:
+    edges: list[dict[str, Any]] = []
+    total_cost = 0.0
+
+    for idx in range(len(path_nodes) - 1):
+        source_id = path_nodes[idx]
+        target_id = path_nodes[idx + 1]
+        edge = _edge_between(storage, source_id, target_id)
+
+        edge_weight = float(edge.weight) if edge is not None else float(storage.get_edge_weight(source_id, target_id))
+        total_cost += edge_weight
+
+        edges.append(
+            {
+                "source": source_id,
+                "target": target_id,
+                "relationship": edge.relationship_type if edge is not None else "related_to",
+                "weight": edge_weight,
+                "cve": edge.cve if edge is not None else None,
+                "cvss": edge.cvss if edge is not None else None,
+            }
+        )
+
+    total_cost_value = round(total_cost_override if total_cost_override is not None else total_cost, 1)
+
+    return {
+        "source": path_nodes[0],
+        "target": path_nodes[-1],
+        "path": path_nodes,
+        "hops": max(0, len(path_nodes) - 1),
+        "risk_score": total_cost_value,
+        "edges": edges,
+    }
+
+
+def _load_mock_metadata_if_available(ingestor: str, mock_file: str) -> dict[str, Any]:
+    if ingestor != "mock":
+        return {}
+
+    path = Path(mock_file)
+    if not path.exists():
+        return {}
+
+    try:
+        with path.open("r", encoding="utf-8") as fp:
+            payload = json.load(fp)
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+    if not isinstance(payload, dict):
+        return {}
+
+    metadata = payload.get("metadata")
+    if not isinstance(metadata, dict):
+        return {}
+
+    cluster_name = metadata.get("cluster")
+    generated = metadata.get("generated")
+    result: dict[str, Any] = {}
+    if isinstance(cluster_name, str) and cluster_name.strip():
+        result["cluster"] = cluster_name.strip()
+    if isinstance(generated, str) and generated.strip():
+        result["source_generated"] = generated.strip()
+    return result
+
+
+def _edge_between(storage: NetworkXGraphStorage, source_id: str, target_id: str) -> Edge | None:
+    edge_data = storage.raw_graph().get_edge_data(source_id, target_id) or {}
+    edge = edge_data.get("edge")
+    if isinstance(edge, Edge):
+        return edge
+    return None
+
+
+def _sort_attack_paths(paths: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return sorted(
+        paths,
+        key=lambda row: (
+            float(row.get("risk_score", 0.0)),
+            int(row.get("hops", 0)),
+            tuple(str(node_id) for node_id in row.get("path", [])),
+        ),
+    )
+
+
+def _calculate_blast_radius_by_source(
+    storage: NetworkXGraphStorage,
+    *,
+    source_ids: list[str],
+    max_hops: int,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for source_id in source_ids:
+        result = calculate_blast_radius(storage, source_id=source_id, max_hops=max_hops)
+        hop_map: dict[str, list[str]] = {}
+        for node_id, hop in result.hops_by_node.items():
+            hop_key = str(hop)
+            hop_map.setdefault(hop_key, []).append(node_id)
+        rows.append(
+            {
+                "source": source_id,
+                "max_hops": max_hops,
+                "count": result.count,
+                "hops": hop_map,
+            }
+        )
+    return rows
+
+
+def _rank_critical_nodes_from_paths(
+    attack_paths: list[dict[str, Any]],
+    *,
+    source_ids: list[str],
+    sink_ids: list[str],
+    top_n: int,
+) -> list[dict[str, Any]]:
+    baseline = len(attack_paths)
+    if baseline == 0:
+        return []
+
+    protected = set(source_ids) | set(sink_ids)
+    impact: dict[str, int] = {}
+    first_seen: dict[str, int] = {}
+    seen_counter = 0
+
+    for row in attack_paths:
+        seen_in_path: set[str] = set()
+        path_nodes = [str(node_id) for node_id in row.get("path", [])]
+        for node_id in path_nodes:
+            if node_id in protected:
+                continue
+            if node_id in seen_in_path:
+                continue
+            seen_in_path.add(node_id)
+
+            if node_id not in first_seen:
+                first_seen[node_id] = seen_counter
+                seen_counter += 1
+
+            impact[node_id] = impact.get(node_id, 0) + 1
+
+    ranked = [
+        {
+            "node_id": node_id,
+            "total_paths_before": baseline,
+            "total_paths_after": baseline - removed,
+            "paths_removed": removed,
+        }
+        for node_id, removed in impact.items()
+    ]
+    ranked.sort(key=lambda row: (-int(row["paths_removed"]), first_seen.get(str(row["node_id"]), 10**9)))
+    return ranked[:top_n]
 
 
 def _build_recommendations(attack_path_result: Any, critical_result: Any, cycles: list[list[str]]) -> list[str]:
@@ -218,15 +497,25 @@ def _graph_data_to_dict(graph_data: ClusterGraphData) -> dict[str, Any]:
         }
         for node in graph_data.nodes
     ]
-    edge_rows = [
-        {
+    edge_rows = []
+    for edge in graph_data.edges:
+        row: dict[str, Any] = {
             "source_id": edge.source_id,
             "target_id": edge.target_id,
             "relationship_type": edge.relationship_type,
             "weight": edge.weight,
         }
-        for edge in graph_data.edges
-    ]
+        if edge.source_ref is not None:
+            row["source_ref"] = edge.source_ref
+        if edge.target_ref is not None:
+            row["target_ref"] = edge.target_ref
+        if edge.cve is not None:
+            row["cve"] = edge.cve
+        if edge.cvss is not None:
+            row["cvss"] = edge.cvss
+        if edge.escalation_type is not None:
+            row["escalation_type"] = edge.escalation_type
+        edge_rows.append(row)
 
     node_rows.sort(key=lambda row: str(row["node_id"]))
     edge_rows.sort(key=lambda row: (str(row["source_id"]), str(row["target_id"]), str(row["relationship_type"])))
@@ -242,6 +531,10 @@ def _export_pdf_report(report: dict[str, Any], output_path: str | None) -> None:
     if not output_path:
         return
     generate_pdf_report(report, output_path)
+
+
+def _parse_bool_flag(value: str) -> bool:
+    return value.strip().lower() == "true"
 
 
 if __name__ == "__main__":

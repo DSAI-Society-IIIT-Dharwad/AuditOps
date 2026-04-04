@@ -35,6 +35,8 @@ class TestMainExport(unittest.TestCase):
                 target_id="Secret:default:db-creds",
                 relationship_type="can_read",
                 weight=3.0,
+                cve="CVE-2026-1000",
+                cvss=8.8,
             )
         ]
         payload = main_mod._graph_data_to_dict(ClusterGraphData(nodes=nodes, edges=edges))
@@ -44,6 +46,8 @@ class TestMainExport(unittest.TestCase):
         self.assertEqual(len(payload["edges"]), 1)
         self.assertIn("node_id", payload["nodes"][0])
         self.assertIn("relationship_type", payload["edges"][0])
+        self.assertEqual(payload["edges"][0]["cve"], "CVE-2026-1000")
+        self.assertEqual(payload["edges"][0]["cvss"], 8.8)
 
     def test_export_graph_data_writes_file(self) -> None:
         graph = ClusterGraphData(
@@ -188,6 +192,49 @@ class TestMainExport(unittest.TestCase):
             self.assertTrue(pdf_out.exists())
             pdf_bytes = pdf_out.read_bytes()
             self.assertTrue(pdf_bytes.startswith(b"%PDF-1.4"))
+
+    def test_main_passes_include_cluster_rbac_flag_to_kubectl_ingestor(self) -> None:
+        source = Node(entity_type="Pod", name="web", namespace="demo", is_source=True)
+        sink = Node(entity_type="Secret", name="db-creds", namespace="demo", is_sink=True)
+        graph = ClusterGraphData(
+            nodes=[source, sink],
+            edges=[
+                Edge(
+                    source_id=source.node_id,
+                    target_id=sink.node_id,
+                    relationship_type="can_read",
+                    weight=1.0,
+                )
+            ],
+        )
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            graph_out = Path(tmp_dir) / "out.json"
+
+            with patch.object(main_mod, "KubectlDataIngestor") as kubectl_ingestor_cls, patch.object(
+                sys,
+                "argv",
+                [
+                    "main.py",
+                    "--ingestor",
+                    "kubectl",
+                    "--namespace",
+                    "demo",
+                    "--include-cluster-rbac",
+                    "false",
+                    "--graph-out",
+                    str(graph_out),
+                ],
+            ), patch.object(main_mod.sys, "stdout", new=io.StringIO()):
+                kubectl_ingestor_cls.return_value.ingest.return_value = graph
+                code = main_mod.main()
+
+            self.assertEqual(code, 0)
+            kubectl_ingestor_cls.assert_called_once_with(
+                fallback_file=None,
+                namespace="demo",
+                include_cluster_rbac=False,
+            )
 
 
 if __name__ == "__main__":
