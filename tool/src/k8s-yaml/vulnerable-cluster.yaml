@@ -1,0 +1,66 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vulnerable-ns
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: prod-db-credentials
+  namespace: vulnerable-ns
+  labels:
+    crown-jewel: "true"
+    sensitivity: critical
+type: Opaque
+data:
+  password: c3VwZXJzZWNyZXRwYXNzd29yZA== 
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: overly-permissive-sa
+  namespace: vulnerable-ns
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: dangerous-secret-reader
+  namespace: vulnerable-ns
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  # VULNERABILITY: No 'resourceNames' specified. 
+  # This allows reading ALL secrets in the namespace, including the DB password.
+  verbs: ["get", "watch", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: bad-binding
+  namespace: vulnerable-ns
+subjects:
+- kind: ServiceAccount
+  name: overly-permissive-sa
+  namespace: vulnerable-ns
+roleRef:
+  kind: Role
+  name: dangerous-secret-reader
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: frontend-webapp-vulnerable
+  namespace: vulnerable-ns
+  labels:
+    public: "true"
+  annotations:
+    security.hack2future.io/source: "true"
+    security.analysis/cvss: "9.8" # High exploitability
+spec:
+  serviceAccountName: overly-permissive-sa # The critical link
+  automountServiceAccountToken: true
+  containers:
+  - name: webapp
+    image: nginx:1.14.2
