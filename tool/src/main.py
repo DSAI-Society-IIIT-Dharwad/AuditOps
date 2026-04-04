@@ -529,6 +529,11 @@ def _graph_data_to_dict(graph_data: ClusterGraphData) -> dict[str, Any]:
             "risk_score": node.risk_score,
             "is_source": node.is_source,
             "is_sink": node.is_sink,
+            "nvd_enriched": node.nvd_enriched,
+            "nvd_source": node.nvd_source,
+            "nvd_max_cvss": node.nvd_max_cvss,
+            "nvd_cve_ids": list(node.nvd_cve_ids),
+            "nvd_image_refs": list(node.nvd_image_refs),
         }
         for node in graph_data.nodes
     ]

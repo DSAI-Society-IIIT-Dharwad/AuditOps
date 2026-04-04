@@ -1,0 +1,86 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vulnerable-ns-test
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: prod-db-credentials
+  namespace: vulnerable-ns-test
+  labels:
+    crown-jewel: "true"
+    sensitivity: critical
+type: Opaque
+data:
+  password: c3VwZXJzZWNyZXRwYXNzd29yZA== 
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: overly-permissive-sa
+  namespace: vulnerable-ns-test
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: dangerous-secret-reader
+  namespace: vulnerable-ns-test
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "watch", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: bad-binding
+  namespace: vulnerable-ns-test
+subjects:
+- kind: ServiceAccount
+  name: overly-permissive-sa
+  namespace: vulnerable-ns-test
+roleRef:
+  kind: Role
+  name: dangerous-secret-reader
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: frontend-webapp-vulnerable
+  namespace: vulnerable-ns-test
+  labels:
+    public: "true"
+  annotations:
+    security.hack2future.io/source: "true"
+    # Notice: I removed the mock security.analysis/cvss annotation! 
+    # Your script now HAS to use the live NVD API to find the risk.
+spec:
+  serviceAccountName: overly-permissive-sa 
+  automountServiceAccountToken: true
+  containers:
+  
+  # TEST CASE 1: Standard Vulnerability
+  # Expected Behavior: API finds CVEs (like CVE-2019-20372) and returns a score (e.g., ~7.5)
+  - name: webapp
+    image: nginx:1.14.2
+    
+  # TEST CASE 2: High Severity Vulnerability
+  # Expected Behavior: API finds older, severe CVEs. This should become the 
+  # highest score that your script ultimately assigns to the Pod node.
+  - name: backend-legacy
+    image: tomcat:8.5.32
+    
+  # TEST CASE 3: The "latest" tag bypass
+  # Expected Behavior: Your Python script should see "latest", instantly skip the 
+  # NVD API call (returning 0.0), and prevent returning a massive false-positive list.
+  - name: sidecar-helper
+    image: busybox:latest
+    
+  # TEST CASE 4: The missing tag bypass
+  # Expected Behavior: Without a colon/version, the API keyword search would fail. 
+  # Your script should catch this, skip the API, and return 0.0.
+  - name: memory-cache
+    image: redis

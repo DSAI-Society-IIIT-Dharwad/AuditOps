@@ -114,6 +114,11 @@ class NetworkXGraphStorage(GraphStorage):
 				"risk_score": node.risk_score,
 				"is_source": node.is_source,
 				"is_sink": node.is_sink,
+				"nvd_enriched": node.nvd_enriched,
+				"nvd_source": node.nvd_source,
+				"nvd_max_cvss": node.nvd_max_cvss,
+				"nvd_cve_ids": list(node.nvd_cve_ids),
+				"nvd_image_refs": list(node.nvd_image_refs),
 			}
 			for node in self.all_nodes()
 		]
@@ -222,8 +227,25 @@ def _node_from_export_row(row: dict[str, Any]) -> Node:
 		risk_score=float(row.get("risk_score", row.get("riskScore", 0.0))),
 		is_source=bool(row.get("is_source", row.get("isSource", False))),
 		is_sink=bool(row.get("is_sink", row.get("isSink", False))),
+		nvd_enriched=bool(row.get("nvd_enriched", row.get("nvdEnriched", False))),
+		nvd_source=str(row.get("nvd_source") or row.get("nvdSource") or "").strip() or None,
+		nvd_max_cvss=(
+			float(row["nvd_max_cvss"])
+			if row.get("nvd_max_cvss") is not None
+			else (float(row["nvdMaxCvss"]) if row.get("nvdMaxCvss") is not None else None)
+		),
+		nvd_cve_ids=_string_tuple_from_row(row, "nvd_cve_ids", "nvdCveIds"),
+		nvd_image_refs=_string_tuple_from_row(row, "nvd_image_refs", "nvdImageRefs"),
 	)
 	return node
+
+
+def _string_tuple_from_row(row: dict[str, Any], *keys: str) -> tuple[str, ...]:
+	for key in keys:
+		value = row.get(key)
+		if isinstance(value, list):
+			return tuple(str(item).strip() for item in value if str(item).strip())
+	return ()
 
 
 def _node_aliases_from_row(row: dict[str, Any], node: Node) -> set[str]:

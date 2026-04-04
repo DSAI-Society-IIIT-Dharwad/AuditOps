@@ -4,7 +4,7 @@ function formatRisk(value) {
   return Number(value || 0).toFixed(1);
 }
 
-export default function ReportPanel({ payload }) {
+export default function ReportPanel({ payload, selectedNodeId }) {
   const report = payload?.report || {};
   const metadata = report.metadata || {};
   const attackPaths = Array.isArray(report.attack_paths) ? report.attack_paths : [];
@@ -12,10 +12,29 @@ export default function ReportPanel({ payload }) {
   const cycles = Array.isArray(report.cycles) ? report.cycles : [];
   const criticalNodes = Array.isArray(report.critical_nodes) ? report.critical_nodes : [];
   const reportSummary = report.summary || {};
+  const nodes = Array.isArray(payload?.nodes) ? payload.nodes : [];
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
 
   const topCritical = criticalNodes[0] || null;
   const topCriticalParsed = parseNodeId(topCritical?.node_id || "");
   const maxRemoved = Math.max(1, ...criticalNodes.map((row) => Number(row.paths_removed || 0)));
+  const selectedNode = nodeById.get(selectedNodeId || "") || null;
+
+  const activeNode =
+    selectedNode ||
+    nodeById.get(topCritical?.node_id || "") ||
+    nodes.find((node) => node.nvd_enriched) ||
+    nodes[0] ||
+    null;
+
+  const activeNodeId = activeNode?.id || topCritical?.node_id || "";
+  const activeNodeParsed = parseNodeId(activeNodeId);
+  const activeNodeRisk = activeNode ? Number(activeNode.risk_score || 0) : Math.round(Number(topCritical?.paths_removed || 0) * 2.1);
+  const activeNodeCves = Array.isArray(activeNode?.nvd_cve_ids) ? activeNode.nvd_cve_ids : [];
+  const activeNodeImages = Array.isArray(activeNode?.nvd_image_refs) ? activeNode.nvd_image_refs : [];
+  const activeNodeCvss = Number(activeNode?.nvd_max_cvss);
+  const hasActiveNodeCvss = Number.isFinite(activeNodeCvss) && activeNodeCvss > 0;
+  const hasNvdMetadata = Boolean(activeNode?.nvd_enriched);
 
   return (
     <aside className="report-panel">
@@ -23,12 +42,14 @@ export default function ReportPanel({ payload }) {
         <div className="section-kicker">Selected Entity</div>
         <div className="entity-header">
           <div>
-            <h2>{topCriticalParsed.name || "No critical node"}</h2>
-            <div className="entity-subline">{topCriticalParsed.entityType}</div>
+            <h2>{activeNodeParsed.name || topCriticalParsed.name || "No selected node"}</h2>
+            <div className="entity-subline">
+              {activeNodeParsed.entityType} | {activeNodeParsed.namespace}
+            </div>
           </div>
           <div className="risk-pill">
             <div className="risk-pill-label">Risk</div>
-            <div className="risk-pill-value">{Math.round(Number(topCritical?.paths_removed || 0) * 2.1)}</div>
+            <div className="risk-pill-value">{formatRisk(activeNodeRisk)}</div>
           </div>
         </div>
         <div className="entity-meta-grid">
@@ -40,6 +61,34 @@ export default function ReportPanel({ payload }) {
             <span>Namespace</span>
             <strong>{metadata.namespace || payload?.context?.namespace || "all"}</strong>
           </div>
+        </div>
+        <div className="nvd-focus">
+          <div className="nvd-focus-header">NVD Vulnerability Metadata</div>
+          {!hasNvdMetadata && <div className="empty-state">No NVD metadata available for this node.</div>}
+          {hasNvdMetadata && (
+            <>
+              <div className="nvd-focus-meta">
+                <span>Source</span>
+                <strong>{activeNode.nvd_source === "annotation" ? "Annotation" : "Live NVD"}</strong>
+              </div>
+              <div className="nvd-focus-meta">
+                <span>Max CVSS</span>
+                <strong>{hasActiveNodeCvss ? formatRisk(activeNodeCvss) : "N/A"}</strong>
+              </div>
+              {activeNodeImages.length > 0 && (
+                <div className="nvd-focus-list">Images: {activeNodeImages.join(", ")}</div>
+              )}
+              {activeNodeCves.length > 0 && (
+                <div className="nvd-chip-list">
+                  {activeNodeCves.slice(0, 8).map((cveId) => (
+                    <span className="nvd-chip" key={cveId}>
+                      {cveId}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
         </div>
       </section>
 

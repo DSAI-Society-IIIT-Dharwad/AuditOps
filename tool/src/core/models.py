@@ -19,6 +19,11 @@ class Node:
 	risk_score: float = 0.0
 	is_source: bool = False
 	is_sink: bool = False
+	nvd_enriched: bool = False
+	nvd_source: str | None = None
+	nvd_max_cvss: float | None = None
+	nvd_cve_ids: tuple[str, ...] = ()
+	nvd_image_refs: tuple[str, ...] = ()
 	node_id: str = field(init=False)
 
 	def __post_init__(self) -> None:
@@ -28,6 +33,28 @@ class Node:
 			raise ValueError("name cannot be empty")
 		if self.risk_score < 0:
 			raise ValueError("risk_score must be >= 0")
+		if self.nvd_max_cvss is not None:
+			try:
+				normalized_cvss = float(self.nvd_max_cvss)
+			except (TypeError, ValueError) as exc:
+				raise ValueError("nvd_max_cvss must be numeric") from exc
+			if normalized_cvss < 0:
+				raise ValueError("nvd_max_cvss must be >= 0")
+			object.__setattr__(self, "nvd_max_cvss", min(10.0, normalized_cvss))
+
+		if self.nvd_source is not None:
+			normalized_nvd_source = self.nvd_source.strip()
+			object.__setattr__(self, "nvd_source", normalized_nvd_source or None)
+
+		normalized_cves = tuple(
+			sorted({str(cve_id).strip() for cve_id in self.nvd_cve_ids if str(cve_id).strip()})
+		)
+		object.__setattr__(self, "nvd_cve_ids", normalized_cves)
+
+		normalized_images = tuple(
+			dict.fromkeys(str(image_ref).strip() for image_ref in self.nvd_image_refs if str(image_ref).strip())
+		)
+		object.__setattr__(self, "nvd_image_refs", normalized_images)
 
 		normalized_namespace = self.namespace.strip() or "default"
 		object.__setattr__(self, "namespace", normalized_namespace)

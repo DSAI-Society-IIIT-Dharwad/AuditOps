@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -46,6 +47,18 @@ _PRIVILEGED_CONTAINER_NODE_PENALTY = 4.0
 _SECRET_SNOOPING_EDGE_PENALTY = 3.0
 
 
+@dataclass(slots=True, frozen=True)
+class _PodRiskContext:
+	"""Computed Pod risk score and optional NVD enrichment details."""
+
+	score: float
+	nvd_enriched: bool = False
+	nvd_source: str | None = None
+	nvd_max_cvss: float | None = None
+	nvd_cve_ids: tuple[str, ...] = ()
+	nvd_image_refs: tuple[str, ...] = ()
+
+
 class KubectlIngestError(RuntimeError):
 	"""Raised when live cluster data cannot be retrieved or parsed."""
 
@@ -70,12 +83,18 @@ def build_cluster_graph_data(
 
 	for item in _safe_items(kube_payload.get("pods")):
 		pod_name, namespace = _metadata_name_ns(item)
+		risk_context = _build_pod_risk_context(item, cve_scorer=cve_scorer)
 		pod = _make_node(
 			"Pod",
 			pod_name,
 			namespace,
-			risk_score=_pod_risk_score(item, cve_scorer=cve_scorer),
+			risk_score=risk_context.score,
 			is_source=_is_public_entrypoint(item),
+			nvd_enriched=risk_context.nvd_enriched,
+			nvd_source=risk_context.nvd_source,
+			nvd_max_cvss=risk_context.nvd_max_cvss,
+			nvd_cve_ids=risk_context.nvd_cve_ids,
+			nvd_image_refs=risk_context.nvd_image_refs,
 		)
 		add_node(pod)
 
@@ -310,6 +329,11 @@ def _make_node(
 	risk_score: float | None = None,
 	is_source: bool = False,
 	is_sink: bool = False,
+	nvd_enriched: bool = False,
+	nvd_source: str | None = None,
+	nvd_max_cvss: float | None = None,
+	nvd_cve_ids: tuple[str, ...] = (),
+	nvd_image_refs: tuple[str, ...] = (),
 ) -> Node:
 	base_risk = _BASE_RISK_BY_KIND.get(entity_type, 3.0)
 	return Node(
@@ -319,6 +343,11 @@ def _make_node(
 		risk_score=base_risk if risk_score is None else risk_score,
 		is_source=is_source,
 		is_sink=is_sink,
+		nvd_enriched=nvd_enriched,
+		nvd_source=nvd_source,
+		nvd_max_cvss=nvd_max_cvss,
+		nvd_cve_ids=nvd_cve_ids,
+		nvd_image_refs=nvd_image_refs,
 	)
 
 
@@ -405,12 +434,37 @@ def _is_crown_jewel(resource: Mapping[str, Any]) -> bool:
 
 
 def _pod_risk_score(pod: Mapping[str, Any], cve_scorer: NVDCveScorer | None = None) -> float:
+	return _build_pod_risk_context(pod, cve_scorer=cve_scorer).score
+
+
+def _build_pod_risk_context(pod: Mapping[str, Any], cve_scorer: NVDCveScorer | None = None) -> _PodRiskContext:
 	base = _BASE_RISK_BY_KIND.get("Pod", 5.0)
-	annotation_bonus = _pod_annotation_risk_bonus(pod)
+	annotation_bonus, annotation_cve_ids, annotation_cvss = _pod_annotation_enrichment(pod)
+	container_images = _pod_container_images(pod)
 	cve_bonus = 0.0
-	if cve_scorer is not None and annotation_bonus == 0.0:
-		cve_bonus = _pod_cve_lookup_risk_bonus(pod, cve_scorer)
-	return (
+	nvd_source: str | None = None
+	nvd_max_cvss: float | None = None
+	nvd_cve_ids: tuple[str, ...] = ()
+	nvd_image_refs: tuple[str, ...] = ()
+	nvd_enriched = False
+
+	if annotation_bonus > 0.0:
+		nvd_source = "annotation"
+		nvd_cve_ids = annotation_cve_ids
+		nvd_max_cvss = annotation_cvss
+		nvd_image_refs = container_images
+		nvd_enriched = True
+	elif cve_scorer is not None:
+		lookup_max_cvss, lookup_cve_ids, lookup_image_refs = _pod_cve_lookup_enrichment(pod, cve_scorer)
+		cve_bonus = lookup_max_cvss
+		if lookup_max_cvss > 0.0 or lookup_cve_ids:
+			nvd_source = "nvd"
+			nvd_max_cvss = lookup_max_cvss if lookup_max_cvss > 0.0 else None
+			nvd_cve_ids = lookup_cve_ids
+			nvd_image_refs = lookup_image_refs
+			nvd_enriched = True
+
+	score = (
 		base
 		+ annotation_bonus
 		+ cve_bonus
@@ -418,47 +472,118 @@ def _pod_risk_score(pod: Mapping[str, Any], cve_scorer: NVDCveScorer | None = No
 		+ _pod_privileged_container_risk_bonus(pod)
 	)
 
+	return _PodRiskContext(
+		score=score,
+		nvd_enriched=nvd_enriched,
+		nvd_source=nvd_source,
+		nvd_max_cvss=nvd_max_cvss,
+		nvd_cve_ids=nvd_cve_ids,
+		nvd_image_refs=nvd_image_refs,
+	)
+
 
 def _pod_cve_lookup_risk_bonus(pod: Mapping[str, Any], cve_scorer: NVDCveScorer) -> float:
-	spec = pod.get("spec", {})
-	if not isinstance(spec, Mapping):
-		return 0.0
-
-	max_cvss = 0.0
-	for container in _all_containers(spec):
-		image_ref = container.get("image")
-		if not image_ref:
-			continue
-		try:
-			result = cve_scorer.score_image(str(image_ref))
-		except Exception:
-			continue
-		if result.max_cvss > max_cvss:
-			max_cvss = float(result.max_cvss)
-
+	max_cvss, _, _ = _pod_cve_lookup_enrichment(pod, cve_scorer)
 	return max_cvss
 
 
-def _pod_annotation_risk_bonus(pod: Mapping[str, Any]) -> float:
+def _pod_cve_lookup_enrichment(
+	pod: Mapping[str, Any], cve_scorer: NVDCveScorer
+) -> tuple[float, tuple[str, ...], tuple[str, ...]]:
+	spec = pod.get("spec", {})
+	if not isinstance(spec, Mapping):
+		return 0.0, (), ()
+
+	max_cvss = 0.0
+	cve_ids: set[str] = set()
+	vulnerable_images: list[str] = []
+
+	for image_ref in _pod_container_images(pod):
+		try:
+			result = cve_scorer.score_image(image_ref)
+		except Exception:
+			continue
+
+		try:
+			result_max_cvss = float(getattr(result, "max_cvss", 0.0) or 0.0)
+		except (TypeError, ValueError):
+			result_max_cvss = 0.0
+
+		if result_max_cvss > max_cvss:
+			max_cvss = result_max_cvss
+
+		image_has_findings = result_max_cvss > 0.0
+		result_cve_ids = getattr(result, "cve_ids", ())
+		if isinstance(result_cve_ids, (tuple, list, set)):
+			for cve_id in result_cve_ids:
+				normalized_cve = str(cve_id).strip()
+				if normalized_cve:
+					cve_ids.add(normalized_cve)
+					image_has_findings = True
+
+		if image_has_findings:
+			vulnerable_images.append(image_ref)
+
+	return max_cvss, tuple(sorted(cve_ids)), tuple(dict.fromkeys(vulnerable_images))
+
+
+def _pod_container_images(pod: Mapping[str, Any]) -> tuple[str, ...]:
+	spec = pod.get("spec", {})
+	if not isinstance(spec, Mapping):
+		return ()
+
+	image_refs: list[str] = []
+	for container in _all_containers(spec):
+		image_ref = container.get("image")
+		if image_ref is None:
+			continue
+		normalized_image = str(image_ref).strip()
+		if normalized_image:
+			image_refs.append(normalized_image)
+
+	return tuple(dict.fromkeys(image_refs))
+
+
+def _pod_annotation_enrichment(pod: Mapping[str, Any]) -> tuple[float, tuple[str, ...], float | None]:
 	metadata = pod.get("metadata", {})
 	annotations = metadata.get("annotations", {})
 	if not isinstance(annotations, Mapping):
-		return 0.0
+		return 0.0, (), None
 
 	for key in ("security.analysis/cvss", "security.hack2future.io/cvss", "cvss"):
 		if key not in annotations:
 			continue
 		parsed = _as_non_negative_float(annotations.get(key))
 		if parsed is not None:
-			return parsed
+			return parsed, _annotation_cve_ids(annotations), parsed
 
+	cve_ids = _annotation_cve_ids(annotations)
+	if cve_ids:
+		# CVE id exists but no numeric CVSS score was provided.
+		return 2.0, cve_ids, None
+
+	return 0.0, (), None
+
+
+def _annotation_cve_ids(annotations: Mapping[str, Any]) -> tuple[str, ...]:
 	for key in ("security.analysis/cve", "security.hack2future.io/cve", "cve"):
 		value = annotations.get(key)
-		if value is not None and str(value).strip():
-			# CVE id exists but no numeric CVSS score was provided.
-			return 2.0
+		if value is None:
+			continue
+		raw = str(value).strip()
+		if not raw:
+			continue
+		tokens = [token.strip() for token in raw.replace(";", ",").split(",")]
+		normalized = tuple(sorted({token for token in tokens if token}))
+		if normalized:
+			return normalized
+		return (raw,)
+	return ()
 
-	return 0.0
+
+def _pod_annotation_risk_bonus(pod: Mapping[str, Any]) -> float:
+	bonus, _, _ = _pod_annotation_enrichment(pod)
+	return bonus
 
 
 def _pod_automount_token_risk_bonus(pod: Mapping[str, Any]) -> float:

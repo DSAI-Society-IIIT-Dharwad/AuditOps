@@ -57,7 +57,6 @@ metadata:
     public: "true"
   annotations:
     security.hack2future.io/source: "true"
-    security.analysis/cvss: "9.8" # High exploitability
 spec:
   serviceAccountName: overly-permissive-sa # The critical link
   automountServiceAccountToken: true

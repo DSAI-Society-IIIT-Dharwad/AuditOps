@@ -81,49 +81,52 @@ class NVDCveScorer:
         return best
 
     def _lookup_cpe_candidates(self, *, product: str, version: str) -> list[str]:
-        payload = self._get_json(
-            self._NVD_CPES_URL,
-            params={
-                "keywordSearch": product,
-                "resultsPerPage": 50,
-            },
-        )
-
-        products = payload.get("products", []) if isinstance(payload, dict) else []
-        if not isinstance(products, list):
-            return []
-
         version_tokens = _version_candidates(version)
-        exact: list[str] = []
-        wildcard: list[str] = []
+        # Prefer a version-aware query first to avoid missing exact versions due
+        # first-page ordering when querying by product alone.
+        for keyword in (f"{product} {version}", product):
+            payload = self._get_json(
+                self._NVD_CPES_URL,
+                params={
+                    "keywordSearch": keyword,
+                    "resultsPerPage": 120,
+                },
+            )
 
-        for row in products:
-            if not isinstance(row, dict):
-                continue
-            cpe_row = row.get("cpe", {})
-            if not isinstance(cpe_row, dict) or cpe_row.get("deprecated"):
-                continue
-            cpe_name = str(cpe_row.get("cpeName") or "").strip()
-            if not cpe_name:
-                continue
-
-            cpe_parts = cpe_name.split(":")
-            if len(cpe_parts) < 6:
+            products = payload.get("products", []) if isinstance(payload, dict) else []
+            if not isinstance(products, list):
                 continue
 
-            cpe_product = str(cpe_parts[4]).strip().lower()
-            cpe_version = str(cpe_parts[5]).strip().lower()
-            if cpe_product != product.lower():
-                continue
+            exact: list[str] = []
+            wildcard: list[str] = []
 
-            if cpe_version in version_tokens:
-                exact.append(cpe_name)
-            elif cpe_version == "*":
-                wildcard.append(cpe_name)
+            for row in products:
+                if not isinstance(row, dict):
+                    continue
+                cpe_row = row.get("cpe", {})
+                if not isinstance(cpe_row, dict) or cpe_row.get("deprecated"):
+                    continue
+                cpe_name = str(cpe_row.get("cpeName") or "").strip()
+                if not cpe_name:
+                    continue
 
-        candidates = exact + wildcard
-        if candidates:
-            return candidates[: self._max_cpe_candidates]
+                cpe_parts = cpe_name.split(":")
+                if len(cpe_parts) < 6:
+                    continue
+
+                cpe_product = str(cpe_parts[4]).strip().lower()
+                cpe_version = str(cpe_parts[5]).strip().lower()
+                if cpe_product != product.lower():
+                    continue
+
+                if cpe_version in version_tokens:
+                    exact.append(cpe_name)
+                elif cpe_version == "*":
+                    wildcard.append(cpe_name)
+
+            candidates = exact + wildcard
+            if candidates:
+                return candidates[: self._max_cpe_candidates]
 
         # Best-effort fallback when product exists but no matching dictionary row was returned.
         fallback = f"cpe:2.3:a:{product}:{product}:{version}:*:*:*:*:*:*:*"

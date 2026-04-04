@@ -1,16 +1,69 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import cytoscape from "cytoscape";
 import dagre from "cytoscape-dagre";
 
 cytoscape.use(dagre);
 
-export default function GraphCanvas({ payload, showAttackPath, showBlastRadius, showCriticalNode }) {
+function formatCvss(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return "N/A";
+  }
+  return numeric.toFixed(1);
+}
+
+function formatNvdSource(source) {
+  if (source === "annotation") {
+    return "Annotation";
+  }
+  if (source === "nvd") {
+    return "Live NVD";
+  }
+  return "Not enriched";
+}
+
+function toPopoverModel(nodeId, node, renderedPosition, canvasWidth, canvasHeight) {
+  const cveIds = Array.isArray(node?.nvd_cve_ids) ? node.nvd_cve_ids : [];
+  const imageRefs = Array.isArray(node?.nvd_image_refs) ? node.nvd_image_refs : [];
+  const rawCvss = Number(node?.nvd_max_cvss);
+  const nvdMaxCvss = Number.isFinite(rawCvss) ? rawCvss : null;
+
+  return {
+    nodeId,
+    name: String(node?.name || nodeId),
+    entityType: String(node?.entity_type || "Unknown"),
+    namespace: String(node?.namespace || "unknown"),
+    risk: Number(node?.risk_score || 0),
+    compromised: Boolean(node?.nvd_enriched),
+    nvdEnriched: Boolean(node?.nvd_enriched),
+    nvdSource: String(node?.nvd_source || ""),
+    nvdMaxCvss,
+    nvdCveIds: cveIds,
+    nvdImageRefs: imageRefs,
+    left: Math.min(Math.max(12, renderedPosition.x + 14), Math.max(12, canvasWidth - 260)),
+    top: Math.min(Math.max(12, renderedPosition.y + 12), Math.max(12, canvasHeight - 200)),
+  };
+}
+
+export default function GraphCanvas({
+  payload,
+  showAttackPath,
+  showBlastRadius,
+  showCriticalNode,
+  selectedNodeId,
+  onSelectNode,
+}) {
   const hostRef = useRef(null);
+  const [popover, setPopover] = useState(null);
 
   useEffect(() => {
     if (!hostRef.current || !payload) {
       return undefined;
     }
+
+    setPopover(null);
+
+    const nodeLookup = new Map((payload.nodes || []).map((node) => [node.id, node]));
 
     const reportAttackPaths = payload.report?.attack_paths || [];
     const attackNodeIds = new Set(
@@ -67,8 +120,15 @@ export default function GraphCanvas({ payload, showAttackPath, showBlastRadius, 
           risk: Number(node.risk_score || 0),
           influence: Number(degreeByNode.get(node.id) || 0) + 1,
           influenceNorm: (Number(degreeByNode.get(node.id) || 0) + 1) / (maxDegree + 1),
+          name: node.name,
+          entityType: node.entity_type,
+          namespace: node.namespace,
           isSource: Boolean(node.is_source),
           isSink: Boolean(node.is_sink),
+          isSelected: Boolean(selectedNodeId) && selectedNodeId === node.id,
+          nvdEnriched: Boolean(node.nvd_enriched),
+          isCompromised: Boolean(node.nvd_enriched),
+          nvdScore: Number(node.nvd_max_cvss || 0),
           inAttackPath: showAttackPath && attackNodeIds.has(node.id),
           inBlastRadius: showBlastRadius && blastNodeIds.has(node.id),
           isCritical: showCriticalNode && criticalNodeId && criticalNodeId === node.id,
@@ -108,7 +168,7 @@ export default function GraphCanvas({ payload, showAttackPath, showBlastRadius, 
           {
             selector: "node",
             style: {
-              shape: "round-rectangle",
+              shape: "ellipse",
               width: "mapData(influenceNorm, 0, 1, 36, 72)",
               height: "mapData(influenceNorm, 0, 1, 36, 72)",
               "background-color": "mapData(risk, 0, 20, #5ed39c, #ff5e63)",
@@ -136,15 +196,21 @@ export default function GraphCanvas({ payload, showAttackPath, showBlastRadius, 
           {
             selector: "node[isSource]",
             style: {
-              shape: "diamond",
               "border-color": "#19d6ff",
             },
           },
           {
             selector: "node[isSink]",
             style: {
-              shape: "hexagon",
               "border-color": "#ff8a57",
+            },
+          },
+          {
+            selector: "node[isCompromised]",
+            style: {
+              "background-color": "#ff4f67",
+              "border-color": "#ff8fa0",
+              "border-width": 3,
             },
           },
           {
@@ -165,6 +231,17 @@ export default function GraphCanvas({ payload, showAttackPath, showBlastRadius, 
             },
           },
           {
+            selector: "node[nvdEnriched]",
+            style: {
+              "border-color": "#ffb17a",
+              "border-width": 3,
+              "pie-size": "92%",
+              "pie-1-background-color": "#ff8a57",
+              "pie-1-background-size": "mapData(nvdScore, 0, 10, 12, 50)",
+              "pie-1-background-opacity": 0.92,
+            },
+          },
+          {
             selector: "node[isCritical]",
             style: {
               "border-color": "#ff4f67",
@@ -172,6 +249,16 @@ export default function GraphCanvas({ payload, showAttackPath, showBlastRadius, 
               "shadow-color": "#ff4f67",
               "shadow-opacity": 0.55,
               "shadow-blur": 28,
+            },
+          },
+          {
+            selector: "node[isSelected]",
+            style: {
+              "border-color": "#ffe28e",
+              "border-width": 4,
+              "shadow-color": "#ffe28e",
+              "shadow-opacity": 0.45,
+              "shadow-blur": 22,
             },
           },
           {
@@ -260,11 +347,43 @@ export default function GraphCanvas({ payload, showAttackPath, showBlastRadius, 
         cy.elements().addClass("faded");
         focusSet.removeClass("faded");
         event.target.addClass("hovered");
+
+        const nodeId = String(event.target.data("id") || "");
+        if (!nodeId) {
+          return;
+        }
+        const node = nodeLookup.get(nodeId);
+        const rendered = event.target.renderedPosition();
+        const canvasWidth = hostRef.current?.clientWidth || 0;
+        const canvasHeight = hostRef.current?.clientHeight || 0;
+        setPopover(toPopoverModel(nodeId, node, rendered, canvasWidth, canvasHeight));
       });
 
       cy.on("mouseout", "node", () => {
         cy.elements().removeClass("faded");
         cy.nodes().removeClass("hovered");
+        setPopover(null);
+      });
+
+      cy.on("tap", "node", (event) => {
+        const nodeId = String(event.target.data("id") || "");
+        if (!nodeId) {
+          return;
+        }
+
+        const node = nodeLookup.get(nodeId);
+        const rendered = event.target.renderedPosition();
+        const canvasWidth = hostRef.current?.clientWidth || 0;
+        const canvasHeight = hostRef.current?.clientHeight || 0;
+        setPopover(toPopoverModel(nodeId, node, rendered, canvasWidth, canvasHeight));
+
+        onSelectNode?.(nodeId);
+      });
+
+      cy.on("tap", (event) => {
+        if (event.target === cy) {
+          setPopover(null);
+        }
       });
     };
 
@@ -276,7 +395,42 @@ export default function GraphCanvas({ payload, showAttackPath, showBlastRadius, 
         cy.destroy();
       }
     };
-  }, [payload, showAttackPath, showBlastRadius, showCriticalNode]);
+  }, [payload, showAttackPath, showBlastRadius, showCriticalNode, selectedNodeId, onSelectNode]);
 
-  return <div ref={hostRef} className="graph-canvas" />;
+  return (
+    <div className="graph-canvas-wrap">
+      <div ref={hostRef} className="graph-canvas" />
+      {popover && (
+        <div className="graph-node-popover" style={{ left: `${popover.left}px`, top: `${popover.top}px` }}>
+          <div className="graph-node-popover-title">{popover.name}</div>
+          <div className="graph-node-popover-subline">
+            {popover.entityType} | {popover.namespace}
+          </div>
+          <div className="graph-node-popover-meta">Risk: {popover.risk.toFixed(1)}</div>
+          <div className="graph-node-popover-meta">
+            Status: {popover.compromised ? "Compromised" : "No compromise signal"}
+          </div>
+          {!popover.nvdEnriched && <div className="graph-node-popover-empty">No NVD metadata on this node.</div>}
+          {popover.nvdEnriched && (
+            <>
+              <div className="graph-node-popover-meta">Source: {formatNvdSource(popover.nvdSource)}</div>
+              <div className="graph-node-popover-meta">Max CVSS: {formatCvss(popover.nvdMaxCvss)}</div>
+              {popover.nvdImageRefs.length > 0 && (
+                <div className="graph-node-popover-meta">Images: {popover.nvdImageRefs.join(", ")}</div>
+              )}
+              {popover.nvdCveIds.length > 0 && (
+                <div className="graph-node-popover-chip-row">
+                  {popover.nvdCveIds.slice(0, 4).map((cveId) => (
+                    <span className="graph-node-popover-chip" key={cveId}>
+                      {cveId}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }

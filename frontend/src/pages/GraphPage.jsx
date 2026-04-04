@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import GraphCanvas from "../components/graph/GraphCanvas";
 import ReportPanel from "../components/risk/ReportPanel";
@@ -31,6 +31,27 @@ export default function GraphPage() {
 
   const summary = useMemo(() => payload?.summary || {}, [payload]);
   const report = useMemo(() => payload?.report || {}, [payload]);
+  const [selectedNodeId, setSelectedNodeId] = useState(null);
+
+  useEffect(() => {
+    const nodes = Array.isArray(payload?.nodes) ? payload.nodes : [];
+    if (nodes.length === 0) {
+      setSelectedNodeId(null);
+      return;
+    }
+
+    if (selectedNodeId && nodes.some((node) => node.id === selectedNodeId)) {
+      return;
+    }
+
+    const preferredNodeId =
+      payload?.analysis?.critical_node?.node_id ||
+      payload?.report?.critical_nodes?.[0]?.node_id ||
+      nodes.find((node) => node.nvd_enriched)?.id ||
+      nodes[0].id;
+
+    setSelectedNodeId(preferredNodeId);
+  }, [payload, selectedNodeId]);
 
   const contextLine = useMemo(() => {
     const topPath = report.attack_paths?.[0];
@@ -100,7 +121,17 @@ export default function GraphPage() {
           <input
             type="checkbox"
             checked={enableNvdScoring}
-            onChange={(event) => setEnableNvdScoring(event.target.checked)}
+            onChange={(event) => {
+              const checked = event.target.checked;
+              setEnableNvdScoring(checked);
+              refreshAnalysis({
+                namespace,
+                includeClusterRbac,
+                enableNvdScoring: checked,
+                maxHops,
+                maxDepth,
+              });
+            }}
           />
           Enable live NVD scoring
         </label>
@@ -168,6 +199,8 @@ export default function GraphPage() {
               showAttackPath={showAttackPath}
               showBlastRadius={showBlastRadius}
               showCriticalNode={showCriticalNode}
+              selectedNodeId={selectedNodeId}
+              onSelectNode={setSelectedNodeId}
             />
           </div>
 
@@ -180,7 +213,7 @@ export default function GraphPage() {
           </div>
         </div>
 
-        <ReportPanel payload={payload} />
+        <ReportPanel payload={payload} selectedNodeId={selectedNodeId} />
       </div>
     </section>
   );

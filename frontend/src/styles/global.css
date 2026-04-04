@@ -369,6 +369,10 @@ button:disabled {
   overflow: hidden;
 }
 
+.graph-canvas-wrap {
+  position: relative;
+}
+
 .graph-canvas {
   width: 100%;
   height: 520px;
@@ -390,6 +394,59 @@ button:disabled {
       transparent 1px,
       transparent 28px
     );
+}
+
+.graph-node-popover {
+  position: absolute;
+  z-index: 25;
+  max-width: 250px;
+  border: 1px solid rgba(255, 182, 147, 0.6);
+  border-radius: 10px;
+  padding: 8px;
+  background: rgba(5, 20, 45, 0.95);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.graph-node-popover-title {
+  font-family: "Sora", sans-serif;
+  color: #ffe4d5;
+  font-size: 12px;
+}
+
+.graph-node-popover-subline {
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-top: 2px;
+}
+
+.graph-node-popover-meta {
+  margin-top: 4px;
+  color: #d6e4ff;
+}
+
+.graph-node-popover-empty {
+  margin-top: 6px;
+  color: var(--muted);
+}
+
+.graph-node-popover-chip-row {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.graph-node-popover-chip {
+  border-radius: 999px;
+  border: 1px solid rgba(255, 182, 147, 0.5);
+  background: rgba(254, 107, 0, 0.18);
+  color: #ffd6c3;
+  padding: 2px 6px;
+  font-size: 10px;
 }
 
 .data-ribbon {
@@ -498,6 +555,54 @@ button:disabled {
 
 .entity-meta-item strong {
   font-size: 11px;
+}
+
+.nvd-focus {
+  margin-top: 10px;
+  border: 1px solid rgba(255, 182, 147, 0.35);
+  border-radius: 8px;
+  background: rgba(254, 107, 0, 0.08);
+  padding: 8px;
+  display: grid;
+  gap: 6px;
+}
+
+.nvd-focus-header {
+  color: #ffd5c2;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.nvd-focus-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.nvd-focus-meta span {
+  color: var(--muted);
+}
+
+.nvd-focus-list {
+  font-size: 11px;
+  color: #ffdaca;
+}
+
+.nvd-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.nvd-chip {
+  border: 1px solid rgba(255, 182, 147, 0.6);
+  border-radius: 999px;
+  background: rgba(254, 107, 0, 0.2);
+  color: #ffe5d9;
+  padding: 2px 7px;
+  font-size: 10px;
 }
 
 .section-block h3 {

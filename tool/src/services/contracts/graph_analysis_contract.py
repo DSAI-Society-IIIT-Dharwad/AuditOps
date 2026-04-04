@@ -38,6 +38,11 @@ def build_nodes(nodes: list[Node]) -> list[dict[str, Any]]:
             "risk_score": node.risk_score,
             "is_source": node.is_source,
             "is_sink": node.is_sink,
+            "nvd_enriched": node.nvd_enriched,
+            "nvd_source": node.nvd_source,
+            "nvd_max_cvss": node.nvd_max_cvss,
+            "nvd_cve_ids": list(node.nvd_cve_ids),
+            "nvd_image_refs": list(node.nvd_image_refs),
             "tags": _tags_for_node(node),
         }
         for node in sorted_nodes
@@ -156,4 +161,6 @@ def _tags_for_node(node: Node) -> list[str]:
         tags.append("crown-jewel")
     if node.entity_type in {"Role", "ClusterRole", "RoleBinding", "ClusterRoleBinding"} and node.risk_score >= 6.5:
         tags.append("rbac-high-risk")
+    if node.nvd_enriched:
+        tags.append("nvd-enriched")
     return tags
