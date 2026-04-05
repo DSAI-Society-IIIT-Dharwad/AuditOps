@@ -8,6 +8,32 @@ It ingests cluster state, builds a directed graph of trust and permission relati
 
 For a fast copy-paste command reference, use [FASTSTART.md](FASTSTART.md).
 
+## Five-Minute Quick Start (New User)
+
+The following path is designed so a new teammate can run the CLI within ~5 minutes.
+
+From repository root:
+
+```bash
+cd tool
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e .
+hack2future --ingestor mock --mock-file ../tests/mock-cluster-graph.json --full-report
+```
+
+Expected output snippet:
+
+```text
+[ SECTION 1 — ATTACK PATH DETECTION (Dijkstra) ]
+⚠  18 attack path(s) detected
+[ SECTION 2 — BLAST RADIUS ANALYSIS (BFS, depth=3) ]
+[ SECTION 3 — CIRCULAR PERMISSION DETECTION (DFS) ]
+[ SECTION 4 — CRITICAL NODE ANALYSIS ]
+SUMMARY
+```
+
 ## Current Scope (Phases 2-6)
 
 - Data ingestion from live `kubectl` or mock JSON.
@@ -23,6 +49,28 @@ For a fast copy-paste command reference, use [FASTSTART.md](FASTSTART.md).
 	- PDF export (`--pdf-out`)
 	- Temporal snapshot diff detection across scans
 	- Snapshot management APIs (list, detail, rollback)
+
+## Algorithm Overview (All 4 Required Algorithms)
+
+1. Dijkstra shortest attack path
+	- Goal: find the minimum-risk route from source to sink.
+	- Risk model: edge `weight` values are summed for total path `risk_score`.
+	- Output evidence: attack path rows list source, target, hops, risk, severity, and per-edge CVE context.
+
+2. BFS blast radius
+	- Goal: count how many resources are reachable from a source within `N` hops.
+	- Traversal model: breadth-first layering (`hop 1`, `hop 2`, ...).
+	- Output evidence: reachable node count and hop buckets per source.
+
+3. DFS cycle detection
+	- Goal: detect circular permission/trust chains.
+	- Traversal model: depth-first search with cycle canonicalization to avoid duplicate reports.
+	- Output evidence: unique ordered cycles plus break-cycle remediation text.
+
+4. Critical node identification
+	- Goal: find the node whose removal disrupts the most attack paths.
+	- Method: remove candidate nodes one-by-one and recount bounded simple paths.
+	- Output evidence: baseline path count, top-impact rankings, and a recommended node/binding to remove.
 
 ## Phase 4 Risk and Penalty Logic
 
@@ -102,8 +150,25 @@ NVD source attribution notice (required by NVD terms):
 
 ## Setup
 
+Option A (recommended, `uv`):
+
 ```bash
 uv sync
+```
+
+Option B (`pip install`, rubric requirement):
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e .
+```
+
+For a non-editable install, replace the last command with:
+
+```bash
+python -m pip install .
 ```
 
 ## Install As System CLI
@@ -251,13 +316,41 @@ uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-grap
 uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --critical-node --max-depth 8
 ```
 
-Expected output snippets:
+Expected output snippets by example:
 
-- Attack-path mode: `⚠ Attack Path Detected` and `Hops: <n> | Risk: <score> (<severity>)`
-- Disconnected source/target in attack-path mode: `No path found between source and target.` (no exception)
-- Blast-radius mode: `Blast Radius: <count> node(s) within <hops> hop(s)`
-- Cycle mode: `Cycles: <count>`
-- Critical-node mode: `Critical Node: <node>` and path-disruption metrics
+1. Full report (`--full-report` or default mode)
+	- `[ SECTION 1 — ATTACK PATH DETECTION (Dijkstra) ]`
+	- `⚠  18 attack path(s) detected` (for `tests/mock-cluster-graph.json`)
+	- `[ SECTION 2 — BLAST RADIUS ANALYSIS (BFS, depth=3) ]`
+	- `[ SECTION 3 — CIRCULAR PERMISSION DETECTION (DFS) ]`
+	- `[ SECTION 4 — CRITICAL NODE ANALYSIS ]`
+	- `SUMMARY`
+
+2. Full report with top six attack paths (`--attack-path-output six`)
+	- `Path #1` through `Path #6`
+	- Summary line: `Attack paths found   : 6`
+
+3. Focused Dijkstra attack path (`--source ... --target ...`)
+	- `⚠ Attack Path Detected`
+	- `Hops: <n> | Risk: <score> (<severity>)`
+
+4. Disconnected explicit source/target
+	- `No path found between source and target.`
+
+5. Focused BFS blast radius (`--blast-radius`)
+	- `Blast Radius: <count> node(s) within <hops> hop(s)`
+
+6. Focused DFS cycle detection (`--cycles`)
+	- `Cycles: <count>`
+	- Example when cycles exist: `Sample Cycle: ...`
+
+7. Focused critical-node analysis (`--critical-node`)
+	- `Critical Node: <node>`
+	- `Paths removed: <n>`
+
+8. Live kubectl ingestion export (`--ingestor kubectl --graph-out ... --pdf-out ...`)
+	- Graph JSON file created at provided `--graph-out` path
+	- PDF report created at provided `--pdf-out` path
 
 Structured full-report readability contract:
 
@@ -404,7 +497,9 @@ uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-grap
 
 ## Schema Reference
 
-The normalized graph artifact uses this top-level shape:
+This section documents the `cluster-graph.json` artifact contract so new contributors can add node/edge types without tracing source code.
+
+### Top-Level Shape
 
 ```json
 {
@@ -414,59 +509,177 @@ The normalized graph artifact uses this top-level shape:
 }
 ```
 
-Node fields:
+- `schema_version`: string. Current major version is `1.x`.
+- `nodes`: array of node objects.
+- `edges`: array of directed edge objects.
 
-- `node_id` (`Type:Namespace:Name`) unique node identifier used by traversal logic.
-- `entity_type` resource/security type (`Pod`, `ServiceAccount`, `Role`, `ClusterRole`, `Secret`, `ConfigMap`, `User`, `Group`, etc.).
-- `name` resource name.
-- `namespace` namespace or `cluster` for cluster-scoped entities.
-- `risk_score` non-negative node risk signal used in visualization and optional path-cost modes.
-- `is_source` marks entry points used for source auto-selection.
-- `is_sink` marks crown-jewel targets used for sink auto-selection.
-- `nvd_enriched`, `nvd_source`, `nvd_max_cvss`, `nvd_cve_ids`, `nvd_image_refs` optional NVD enrichment metadata for Pod nodes.
+### Node Schema
 
-Edge fields:
+Required fields:
 
-- `source_id`, `target_id` node references.
-- `relationship_type` directed relation (`uses`, `bound_to`, `can_read`, `grants`, etc.).
-- `weight` traversal cost contribution used by Dijkstra.
-- `cve`, `cvss` optional vulnerability annotation shown in reports.
-- `source_ref`, `target_ref`, `escalation_type` optional compatibility metadata.
+- `node_id` (`Type:Namespace:Name`), unique identifier used by graph traversal.
+- `entity_type` (string), logical node type.
+- `name` (string), resource/entity name.
+- `namespace` (string), namespace, or `cluster` for cluster-scoped entities.
+- `risk_score` (float, `>= 0`), node-local risk signal.
+- `is_source` (boolean), entrypoint marker.
+- `is_sink` (boolean), crown-jewel/target marker.
 
-Weight semantics:
+Optional fields:
 
-- Base edge weights model privilege/trust traversal difficulty.
-- Higher weights indicate more severe or sensitive movement steps.
-- Additional penalties (wildcard RBAC, secret snooping) are applied during ingestion and become part of edge weights.
+- `cves` (array of CVE IDs): compatibility alias for `nvd_cve_ids`.
+- `nvd_enriched` (boolean): whether NVD/annotation enrichment was applied.
+- `nvd_source` (string): enrichment source, typically `annotation` or `nvd`.
+- `nvd_max_cvss` (float, usually `0.0-10.0`): max CVSS across associated CVEs.
+- `nvd_cve_ids` (array of CVE IDs): canonical per-node CVE list.
+- `nvd_image_refs` (array of strings): container images used for NVD lookup.
 
-Example node row:
+### Enumerated Node Types
+
+Core node types generated by live Kubernetes ingestion:
+
+- `Pod`
+- `ServiceAccount`
+- `Role`
+- `RoleBinding`
+- `ClusterRole`
+- `ClusterRoleBinding`
+- `Secret`
+- `ConfigMap`
+- `User`
+- `Group`
+
+Additional node types already used in repository fixtures/imports:
+
+- `ExternalActor`
+- `Service`
+- `Database`
+- `Node`
+- `Namespace`
+- `PersistentVolume`
+
+Extension rule:
+
+- New node types are allowed as long as `entity_type` is non-empty and `node_id` remains stable in `Type:Namespace:Name` form.
+
+### Edge Schema
+
+Required fields:
+
+- `source_id` (string): source node id.
+- `target_id` (string): target node id.
+- `relationship_type` (string): directed relationship label.
+- `weight` (float, `>= 0`): traversal cost used by attack-path scoring.
+
+Optional fields:
+
+- `cve` (string): CVE associated with this step.
+- `cvss` (float, `>= 0`, typically `0.0-10.0`): CVSS for `cve`.
+- `source_ref`, `target_ref` (string): original alias ids from imported payloads.
+- `escalation_type` (string): optional classifier for escalation category.
+
+Compatibility aliases accepted on import:
+
+- Source id: `source_id`, `source_node_id`, `sourceNodeId`, `source`
+- Target id: `target_id`, `target_node_id`, `targetNodeId`, `target`
+- Relationship: `relationship_type`, `relationshipType`, `relationship`
+
+Comment-only rows are allowed in mock fixtures when a row contains `comment` and no edge coordinates.
+
+### Enumerated Relationship Types
+
+Canonical relationship values emitted by the kubectl ingestor:
+
+- `uses`
+- `bound_to`
+- `can_read`
+- `grants`
+
+Relationship values already used in repository fixtures/imports (preserved as-is):
+
+- `admin-grant`
+- `admin-over`
+- `bound-to`
+- `calls`
+- `can-exec`
+- `can-exec-on`
+- `can-read`
+- `deployed-in`
+- `exposes-endpoint`
+- `falls-back-to`
+- `grants-access-to`
+- `hosts`
+- `impersonates`
+- `mounts`
+- `reaches`
+- `reads`
+- `routes-to`
+- `uses`
+
+Extension rule:
+
+- Parsers accept any non-empty `relationship_type` string. Use stable, lowercase labels (`snake_case` or `kebab-case`) for consistency.
+
+### Weight Semantics
+
+- `weight` is the per-edge traversal cost and is the primary attack-path risk unit.
+- Dijkstra attack paths minimize total path cost.
+- Reported attack-path `risk_score` is the sum of edge weights along the chosen path (rounded to 1 decimal place).
+- Weight values must be non-negative.
+- In live ingestion, policy penalties are encoded directly into edge weights:
+	- wildcard RBAC penalty: `+5.0`
+	- secret-snooping penalty: `+3.0`
+
+### Source and Sink Flag Semantics
+
+- `is_source = true` marks entry nodes used for automatic source selection when `--source` is not provided.
+- `is_sink = true` marks target nodes used for automatic sink selection when `--target` is not provided.
+- If no flags are set, the CLI falls back to heuristics (for example Pod-first sources, then sensitive resource sinks).
+
+### CVE Field Format
+
+- Canonical CVE identifier format: `CVE-YYYY-NNNN` or `CVE-YYYY-NNNNN...`.
+- Recommended validation regex: `^CVE-[0-9]{4}-[0-9]{4,}$`.
+- Edge-level CVE fields:
+	- `cve`: one CVE id per edge step (optional).
+	- `cvss`: numeric score for `cve` (optional).
+- Node-level CVE fields:
+	- `nvd_cve_ids`: canonical list of CVE ids for the node.
+	- `cves`: compatibility alias accepted and exported for legacy payloads.
+- Import compatibility: `nvd_cve_ids`/`cves` may be provided as arrays or as comma/semicolon-delimited strings.
+
+### Example Node JSON
 
 ```json
 {
-	"node_id": "Pod:vulnerable-ns:frontend-webapp-vulnerable",
+	"node_id": "Pod:default:web-frontend",
 	"entity_type": "Pod",
-	"name": "frontend-webapp-vulnerable",
-	"namespace": "vulnerable-ns",
+	"name": "web-frontend",
+	"namespace": "default",
 	"risk_score": 14.7,
 	"is_source": true,
 	"is_sink": false,
 	"nvd_enriched": true,
 	"nvd_source": "nvd",
 	"nvd_max_cvss": 7.7,
-	"nvd_cve_ids": ["CVE-2019-20372"]
+	"nvd_cve_ids": ["CVE-2019-20372"],
+	"cves": ["CVE-2019-20372"],
+	"nvd_image_refs": ["nginx:1.19.1"]
 }
 ```
 
-Example edge row:
+### Example Edge JSON
 
 ```json
 {
-	"source_id": "Pod:vulnerable-ns:frontend-webapp-vulnerable",
-	"target_id": "ServiceAccount:vulnerable-ns:overly-permissive-sa",
-	"relationship_type": "uses",
-	"weight": 2.0,
+	"source_id": "ServiceAccount:default:sa-webapp",
+	"target_id": "Role:default:secret-reader",
+	"relationship_type": "bound_to",
+	"weight": 4.0,
 	"cve": null,
-	"cvss": null
+	"cvss": null,
+	"source_ref": "sa-webapp",
+	"target_ref": "role-secret-reader"
 }
 ```
 
@@ -505,7 +718,23 @@ uv run python -m unittest test/test_networkx_builder.py -v
 uv run python -m unittest test/test_kubectl_runner.py -v
 ```
 
-## Key Paths
+## Project Structure Overview
+
+```text
+tool/
+	src/
+		main.py                 # CLI entrypoint and report orchestration
+		ingestion/              # kubectl/mock parsers and graph normalization
+		graph/                  # networkx graph storage and JSON export/replay
+		analysis/               # Dijkstra, BFS, DFS cycle, critical-node logic
+		reporting/              # CLI formatter and PDF generator
+		api/                    # FastAPI routes and schemas
+		services/               # NVD scoring, contracts, temporal snapshot services
+	test/                     # unit and API tests
+	out/                      # generated graph/report artifacts and snapshots
+```
+
+Key paths:
 
 - Entry point: `src/main.py`
 - Ingestion: `src/ingestion/kubectl_runner.py`, `src/ingestion/mock_parser.py`

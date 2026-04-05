@@ -27,6 +27,30 @@ The repository contains:
 
 ## Quick Start
 
+### Five-Minute CLI Run (pip install path)
+
+```bash
+cd tool
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e .
+hack2future --ingestor mock --mock-file ../tests/mock-cluster-graph.json --full-report
+```
+
+Expected output snippet:
+
+```text
+[ SECTION 1 — ATTACK PATH DETECTION (Dijkstra) ]
+⚠  18 attack path(s) detected
+[ SECTION 2 — BLAST RADIUS ANALYSIS (BFS, depth=3) ]
+[ SECTION 3 — CIRCULAR PERMISSION DETECTION (DFS) ]
+[ SECTION 4 — CRITICAL NODE ANALYSIS ]
+SUMMARY
+```
+
+For complete CLI examples (including focused modes and expected snippets), see [tool/README.md](tool/README.md).
+
 ### 0) Install CLI Command (Optional)
 
 ```bash
@@ -69,6 +93,13 @@ Open:
 Snapshot rollback does not change cluster resources.
 
 Rollback promotes a chosen historical snapshot into a new latest snapshot in the same scope so future temporal comparisons use that promoted baseline.
+
+## Algorithms At A Glance
+
+- Dijkstra: computes minimum-risk attack path using edge weights.
+- BFS: computes blast radius by hop depth from each source.
+- DFS: detects circular permission chains.
+- Critical-node analysis: ranks node removals by attack-path disruption impact.
 
 ## Report Parity
 
@@ -116,4 +147,5 @@ Report structure guarantees (readability rubric):
 ## Documentation Entry Points
 
 - Backend details and API reference: [tool/README.md](tool/README.md)
+- Cluster graph schema contract: [tool/README.md#schema-reference](tool/README.md#schema-reference)
 - Frontend pages and usage: [frontend/README.md](frontend/README.md)
