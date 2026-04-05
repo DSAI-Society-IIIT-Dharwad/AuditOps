@@ -32,7 +32,7 @@ The frontend should consume this response shape.
   "schema_version": "1.0.0",
   "generated_at": "2026-04-04T14:23:11Z",
   "context": {
-    "cluster": "kind-hack2future",
+    "cluster": "kind-kubepath",
     "namespace": "vulnerable-ns",
     "directed": true
   },

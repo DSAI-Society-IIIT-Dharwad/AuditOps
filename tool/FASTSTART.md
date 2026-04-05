@@ -84,8 +84,8 @@ cd C:\path\to\Hack2Future\tool
 ### A) Live cluster (namespace scoped)
 
 ```bash
-python src/main.py --ingestor kubectl --namespace vulnerable-ns --graph-out out/vulnerable-graph.json --pdf-out out/vulnerable-report.pdf
-python src/main.py --ingestor kubectl --namespace secure-ns --graph-out out/secure-graph.json --pdf-out out/secure-report.pdf
+kubepath --ingestor kubectl --namespace vulnerable-ns --graph-out out/vulnerable-graph.json --pdf-out out/vulnerable-report.pdf
+kubepath --ingestor kubectl --namespace secure-ns --graph-out out/secure-graph.json --pdf-out out/secure-report.pdf
 ```
 
 ### B) Namespace RBAC modes
@@ -93,31 +93,31 @@ python src/main.py --ingestor kubectl --namespace secure-ns --graph-out out/secu
 Strict mode (exclude cluster role bindings):
 
 ```bash
-python src/main.py --ingestor kubectl --namespace vulnerable-ns --include-cluster-rbac false --graph-out out/vulnerable-strict.json
+kubepath --ingestor kubectl --namespace vulnerable-ns --include-cluster-rbac false --graph-out out/vulnerable-strict.json
 ```
 
 Hybrid mode (default behavior):
 
 ```bash
-python src/main.py --ingestor kubectl --namespace vulnerable-ns --include-cluster-rbac true --graph-out out/vulnerable-hybrid.json
+kubepath --ingestor kubectl --namespace vulnerable-ns --include-cluster-rbac true --graph-out out/vulnerable-hybrid.json
 ```
 
 ### C) Mock mode
 
 ```bash
-python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --graph-out out/mock-graph.json --pdf-out out/mock-report.pdf
+kubepath --ingestor mock --mock-file ../tests/mock-cluster-graph.json --graph-out out/mock-graph.json --pdf-out out/mock-report.pdf
 ```
 
 ### D) Replay from exported graph
 
 ```bash
-python src/main.py --graph-in out/vulnerable-graph.json --pdf-out out/replay-report.pdf
+kubepath --graph-in out/vulnerable-graph.json --pdf-out out/replay-report.pdf
 ```
 
 ### E) Temporal diff with explicit snapshot directory
 
 ```bash
-python src/main.py --ingestor kubectl --namespace vulnerable-ns --snapshot-dir out/custom-snapshots
+kubepath --ingestor kubectl --namespace vulnerable-ns --snapshot-dir out/custom-snapshots
 ```
 
 Notes:
@@ -139,7 +139,7 @@ export NVD_API_KEY="your_nvd_api_key"
 ### Run with live NVD scoring
 
 ```bash
-python src/main.py --ingestor kubectl --namespace vulnerable-ns --enable-nvd-scoring true --nvd-timeout 10 --graph-out out/vulnerable-nvd.json
+kubepath --ingestor kubectl --namespace vulnerable-ns --enable-nvd-scoring true --nvd-timeout 10 --graph-out out/vulnerable-nvd.json
 ```
 
 ### Notes
@@ -171,8 +171,8 @@ curl "http://localhost:8000/api/v1/graph-analysis?namespace=vulnerable-ns&includ
 ## 7) Local Cluster Bootstrap (Optional)
 
 ```bash
-kind create cluster --name hack2future --config src/k8s-yaml/cluster-config.yaml
-kubectl config use-context kind-hack2future
+kind create cluster --name kubepath --config src/k8s-yaml/cluster-config.yaml
+kubectl config use-context kind-kubepath
 kubectl apply -f src/k8s-yaml/vulnerable-cluster.yaml
 kubectl apply -f src/k8s-yaml/secure-cluster.yaml
 ```

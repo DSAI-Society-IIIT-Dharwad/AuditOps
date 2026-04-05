@@ -17,7 +17,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -e .
-hack2future --ingestor mock --mock-file ../tests/mock-cluster-graph.json --full-report
+kubepath --ingestor mock --mock-file ../tests/mock-cluster-graph.json --full-report
 ```
 
 ## Five-Minute CLI Quickstart (Windows PowerShell)
@@ -30,7 +30,7 @@ py -3 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install -e .
-hack2future --ingestor mock --mock-file ../tests/mock-cluster-graph.json --full-report
+kubepath --ingestor mock --mock-file ../tests/mock-cluster-graph.json --full-report
 ```
 
 ## Five-Minute CLI Quickstart (Windows Command Prompt)
@@ -43,7 +43,7 @@ py -3 -m venv .venv
 .\.venv\Scripts\activate.bat
 python -m pip install --upgrade pip
 python -m pip install -e .
-hack2future --ingestor mock --mock-file ../tests/mock-cluster-graph.json --full-report
+kubepath --ingestor mock --mock-file ../tests/mock-cluster-graph.json --full-report
 ```
 
 Expected section markers:
@@ -107,8 +107,8 @@ python -m pip install -r requirements.txt
 If you installed with Option A (`python -m pip install -e .`) or a regular package install (`python -m pip install .`):
 
 ```bash
-hack2future --help
-h2f --help
+kubepath --help
+kp --help
 ```
 
 ## Run Backend API
@@ -168,8 +168,8 @@ Open:
 ## Optional Local Cluster Bootstrap
 
 ```bash
-kind create cluster --name hack2future --config src/k8s-yaml/cluster-config.yaml
-kubectl config use-context kind-hack2future
+kind create cluster --name kubepath --config src/k8s-yaml/cluster-config.yaml
+kubectl config use-context kind-kubepath
 kubectl apply -f src/k8s-yaml/vulnerable-cluster.yaml
 kubectl apply -f src/k8s-yaml/secure-cluster.yaml
 ```

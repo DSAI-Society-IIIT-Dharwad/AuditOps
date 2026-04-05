@@ -55,28 +55,28 @@ uv run python -m unittest discover -s test -v
 4. Full report smoke run with mock graph
 ```bash
 cd tool
-uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --full-report
+kubepath --ingestor mock --mock-file ../tests/mock-cluster-graph.json --full-report
 ```
 
 5. Focused report mode checks
 ```bash
 cd tool
-uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --attack-path
-uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --blast-radius
-uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --cycles
-uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --critical-node
+kubepath --ingestor mock --mock-file ../tests/mock-cluster-graph.json --attack-path
+kubepath --ingestor mock --mock-file ../tests/mock-cluster-graph.json --blast-radius
+kubepath --ingestor mock --mock-file ../tests/mock-cluster-graph.json --cycles
+kubepath --ingestor mock --mock-file ../tests/mock-cluster-graph.json --critical-node
 ```
 
 6. Export checks (graph JSON + PDF)
 ```bash
 cd tool
-uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --graph-out out/verify-graph.json --pdf-out out/verify-report.pdf --full-report
+kubepath --ingestor mock --mock-file ../tests/mock-cluster-graph.json --graph-out out/verify-graph.json --pdf-out out/verify-report.pdf --full-report
 ```
 
 7. Graph replay check (`--graph-in`)
 ```bash
 cd tool
-uv run python src/main.py --graph-in out/verify-graph.json --full-report
+kubepath --graph-in out/verify-graph.json --full-report
 ```
 
 ### Frontend integrity check

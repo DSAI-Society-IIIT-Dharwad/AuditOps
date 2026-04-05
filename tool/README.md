@@ -38,7 +38,7 @@ python -m pip install -e .
 Run full report on mock fixture:
 
 ```bash
-python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --full-report
+kubepath --ingestor mock --mock-file ../tests/mock-cluster-graph.json --full-report
 ```
 
 Run API server:

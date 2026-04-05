@@ -177,7 +177,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--version",
         action="version",
-        version=f"hack2future-cli {_resolve_cli_version()}",
+        version=f"kubepath-cli {_resolve_cli_version()}",
     )
     parser.add_argument("--ingestor", choices=("kubectl", "mock"), default="kubectl")
     parser.add_argument(
@@ -912,7 +912,7 @@ def _parse_bool_flag(value: str) -> bool:
 
 def _resolve_cli_version() -> str:
     try:
-        return importlib_metadata.version("hack2future-cli")
+        return importlib_metadata.version("kubepath-cli")
     except importlib_metadata.PackageNotFoundError:
         return "dev"
 

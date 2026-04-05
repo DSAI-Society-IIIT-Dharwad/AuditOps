@@ -8,19 +8,19 @@ Mock fixture full report:
 
 ```bash
 cd tool
-python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --full-report
+kubepath --ingestor mock --mock-file ../tests/mock-cluster-graph.json --full-report
 ```
 
 Limit Section 1 to top 6 attack paths:
 
 ```bash
-python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --full-report --attack-path-output six
+kubepath --ingestor mock --mock-file ../tests/mock-cluster-graph.json --full-report --attack-path-output six
 ```
 
 Show all detected attack paths:
 
 ```bash
-python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --full-report --attack-path-output all
+kubepath --ingestor mock --mock-file ../tests/mock-cluster-graph.json --full-report --attack-path-output all
 ```
 
 ## Focused Algorithm Modes
@@ -28,37 +28,37 @@ python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json 
 Dijkstra (explicit source/target):
 
 ```bash
-python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --attack-path --source User:default:dev-1 --target Database:data:production-db
+kubepath --ingestor mock --mock-file ../tests/mock-cluster-graph.json --attack-path --source User:default:dev-1 --target Database:data:production-db
 ```
 
 BFS blast radius:
 
 ```bash
-python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --blast-radius --source Pod:default:web-frontend --max-hops 3
+kubepath --ingestor mock --mock-file ../tests/mock-cluster-graph.json --blast-radius --source Pod:default:web-frontend --max-hops 3
 ```
 
 DFS cycle detection:
 
 ```bash
-python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --cycles
+kubepath --ingestor mock --mock-file ../tests/mock-cluster-graph.json --cycles
 ```
 
 Critical-node analysis:
 
 ```bash
-python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --critical-node --max-depth 8
+kubepath --ingestor mock --mock-file ../tests/mock-cluster-graph.json --critical-node --max-depth 8
 ```
 
 ## Live Ingestion
 
 ```bash
-python src/main.py --ingestor kubectl --namespace vulnerable-ns --graph-out out/vulnerable-graph.json --pdf-out out/vulnerable-report.pdf
+kubepath --ingestor kubectl --namespace vulnerable-ns --graph-out out/vulnerable-graph.json --pdf-out out/vulnerable-report.pdf
 ```
 
 Enable live NVD scoring:
 
 ```bash
-python src/main.py --ingestor kubectl --namespace vulnerable-ns --enable-nvd-scoring true --nvd-timeout 10
+kubepath --ingestor kubectl --namespace vulnerable-ns --enable-nvd-scoring true --nvd-timeout 10
 ```
 
 ## Graph Export and Replay
@@ -66,13 +66,13 @@ python src/main.py --ingestor kubectl --namespace vulnerable-ns --enable-nvd-sco
 Export normalized graph and PDF:
 
 ```bash
-python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --graph-out out/mock-graph.json --pdf-out out/mock-report.pdf
+kubepath --ingestor mock --mock-file ../tests/mock-cluster-graph.json --graph-out out/mock-graph.json --pdf-out out/mock-report.pdf
 ```
 
 Replay from a graph artifact:
 
 ```bash
-python src/main.py --graph-in out/mock-graph.json --full-report
+kubepath --graph-in out/mock-graph.json --full-report
 ```
 
 ## Temporal Snapshot Controls
@@ -80,7 +80,7 @@ python src/main.py --graph-in out/mock-graph.json --full-report
 Use custom snapshot directory:
 
 ```bash
-python src/main.py --ingestor kubectl --namespace vulnerable-ns --snapshot-dir out/custom-snapshots
+kubepath --ingestor kubectl --namespace vulnerable-ns --snapshot-dir out/custom-snapshots
 ```
 
 ## Namespace RBAC Modes
@@ -88,13 +88,13 @@ python src/main.py --ingestor kubectl --namespace vulnerable-ns --snapshot-dir o
 Strict namespace mode (exclude cluster RBAC expansion):
 
 ```bash
-python src/main.py --ingestor kubectl --namespace vulnerable-ns --include-cluster-rbac false
+kubepath --ingestor kubectl --namespace vulnerable-ns --include-cluster-rbac false
 ```
 
 Hybrid mode (default with namespace + include cluster RBAC):
 
 ```bash
-python src/main.py --ingestor kubectl --namespace vulnerable-ns --include-cluster-rbac true
+kubepath --ingestor kubectl --namespace vulnerable-ns --include-cluster-rbac true
 ```
 
 ## CLI Flags (Reference)

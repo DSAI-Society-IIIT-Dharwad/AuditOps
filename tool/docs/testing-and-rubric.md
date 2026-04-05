@@ -55,7 +55,7 @@ python -m unittest test/test_shortest_path.py test/test_blast_radius.py test/tes
 
 ```bash
 cd tool
-python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json > ../tests/actual-output.txt
+kubepath --ingestor mock --mock-file ../tests/mock-cluster-graph.json > ../tests/actual-output.txt
 cd ..
 diff -u tests/sample-output.txt tests/actual-output.txt
 ```
