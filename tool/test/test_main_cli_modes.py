@@ -117,6 +117,37 @@ class TestMainCliModes(unittest.TestCase):
 
         self.assertEqual(set(report.keys()), {"attack_path", "recommendations", "temporal"})
 
+    def test_cli_entrypoint_unknown_node_returns_non_zero_and_human_readable_error(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            graph_in = root / "in.json"
+            graph_out = root / "out.json"
+            graph_in.write_text(json.dumps(self._graph_fixture_payload()), encoding="utf-8")
+
+            argv = [
+                "main.py",
+                "--graph-in",
+                str(graph_in),
+                "--graph-out",
+                str(graph_out),
+                "--source",
+                "Pod:demo:not-real",
+                "--target",
+                "Secret:demo:crown",
+            ]
+            stderr_stream = io.StringIO()
+
+            with patch.object(sys, "argv", argv), patch.object(
+                main_mod.sys,
+                "stdout",
+                new=io.StringIO(),
+            ), patch.object(main_mod.sys, "stderr", new=stderr_stream):
+                code = main_mod._run_cli_entrypoint()
+
+        self.assertNotEqual(code, 0)
+        self.assertIn("Error: source node not found: Pod:demo:not-real", stderr_stream.getvalue())
+        self.assertNotIn("Traceback", stderr_stream.getvalue())
+
     def _run_main_and_capture_report(self, extra_args: list[str]) -> dict[str, object]:
         with tempfile.TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)

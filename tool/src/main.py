@@ -738,5 +738,20 @@ def _resolve_cli_version() -> str:
         return "dev"
 
 
+def _format_cli_error(exc: Exception) -> str:
+    if isinstance(exc, KeyError) and exc.args:
+        return str(exc.args[0])
+    message = str(exc).strip()
+    return message or exc.__class__.__name__
+
+
+def _run_cli_entrypoint() -> int:
+    try:
+        return main()
+    except Exception as exc:
+        sys.stderr.write(f"Error: {_format_cli_error(exc)}\n")
+        return 1
+
+
 if __name__ == "__main__":
-	raise SystemExit(main())
+    raise SystemExit(_run_cli_entrypoint())

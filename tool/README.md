@@ -249,6 +249,13 @@ Expected output snippets:
 - Cycle mode: `Cycles: <count>`
 - Critical-node mode: `Critical Node: <node>` and path-disruption metrics
 
+CLI behavior contract:
+
+- `--help` prints usage text and exits with code `0`.
+- Successful analysis runs exit with code `0`.
+- Invalid explicit nodes (for example `--source Pod:default:not-real`) exit with non-zero code and a clean one-line error.
+- Runtime errors are printed as human-readable `Error: ...` messages without traceback noise.
+
 ### Temporal Snapshot Diff Alerts (Bonus 3)
 
 Temporal analysis is now automatic on every scan.
@@ -354,6 +361,7 @@ Use this section as a submission checklist that maps rubric items to concrete im
 | DFS cycle detection | `src/analysis/cycle_detect.py`, CLI mode `--cycles` | `uv run python -m unittest test/test_cycle_detect.py -v` |
 | Critical-node disruption analysis | `src/analysis/critical_node.py`, CLI mode `--critical-node` | `uv run python -m unittest test/test_critical_node.py -v` |
 | Focused per-algorithm CLI rendering | `src/main.py` (`_selected_report_modes`, `_select_report_view`) | `uv run python -m unittest test/test_main_cli_modes.py -v` |
+| CLI error messaging and exit-code behavior | `src/main.py` (`_run_cli_entrypoint`, `_format_cli_error`) | `uv run python src/main.py --help`; `uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --attack-path --source Pod:default:not-real --target Database:data:production-db` |
 | CLI and PDF reporting artifacts | `src/reporting/cli_formatter.py`, `src/reporting/pdf_generator.py` | `uv run python -m unittest test/test_cli_formatter.py test/test_pdf_generator.py -v` |
 | API contract for frontend | `src/api/routes/graph_analysis.py`, `src/services/contracts/graph_analysis_contract.py` | `uv run python -m unittest test/test_api/test_graph_analysis_api.py test/test_graph_analysis_contract.py -v` |
 | Optional live NVD enrichment for Pods | `src/services/cve/nvd_scorer.py`, `src/ingestion/kubectl_runner.py` | `uv run python -m unittest test/test_nvd_scorer.py test/test_kubectl_runner.py -v` |
