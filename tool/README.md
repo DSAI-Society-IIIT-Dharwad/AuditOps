@@ -378,7 +378,7 @@ Use this section as a submission checklist that maps rubric items to concrete im
 |---|---|---|
 | Ingest from live cluster or mock input | `src/ingestion/kubectl_runner.py`, `src/ingestion/mock_parser.py` | `uv run python -m unittest test/test_kubectl_runner.py test/test_mock_parser.py -v` |
 | Build and replay normalized graph artifact | `src/graph/networkx_builder.py`, `src/main.py` (`--graph-out`, `--graph-in`) | `uv run python -m unittest test/test_networkx_builder.py test/test_main_export.py -v` |
-| BFS blast-radius analysis | `src/analysis/blast_radius.py`, CLI mode `--blast-radius` | `uv run python -m unittest test/test_blast_radius.py -v` |
+| BFS blast-radius analysis | `src/analysis/blast_radius.py`, CLI mode `--blast-radius` | `uv run python -m unittest test/test_blast_radius.py -v` (includes rubric BFS-1, BFS-2, and isolated-source BFS-3 cases) |
 | Dijkstra shortest attack path | `src/analysis/shortest_path.py`, CLI mode `--attack-path` | `uv run python -m unittest test/test_shortest_path.py -v` |
 | Attack path output accuracy (sequence, hops, risk sum, CVE labels, sort order) | `src/main.py` (`_enumerate_best_attack_paths`), `src/reporting/cli_formatter.py` | `uv run python -m unittest test/test_attack_path_accuracy.py -v` |
 | DFS cycle detection | `src/analysis/cycle_detect.py`, CLI mode `--cycles` | `uv run python -m unittest test/test_cycle_detect.py -v` |

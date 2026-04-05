@@ -9,6 +9,17 @@ from dataclasses import field
 from core.interfaces import GraphStorage
 
 
+NON_PROPAGATING_RELATIONSHIPS = {
+	"grants-access-to",
+	"admin-over",
+}
+
+SERVICE_ACCOUNT_LINK_RELATIONSHIPS = {
+	"uses",
+	"falls-back-to",
+}
+
+
 @dataclass(slots=True, frozen=True)
 class BlastRadiusResult:
 	"""Result of bounded BFS traversal from a compromised source."""
@@ -51,7 +62,7 @@ def calculate_blast_radius(storage: GraphStorage, source_id: str, max_hops: int 
 		if hops >= max_hops:
 			continue
 
-		for neighbor in storage.neighbors(current):
+		for neighbor in _bfs_neighbors(storage, current, source_id=source_id):
 			if neighbor in visited:
 				continue
 			visited.add(neighbor)
@@ -72,6 +83,98 @@ def calculate_blast_radius(storage: GraphStorage, source_id: str, max_hops: int 
 		hops_by_node=hops_by_node,
 		paths_by_node=paths_by_node,
 	)
+
+
+def _bfs_neighbors(storage: GraphStorage, node_id: str, *, source_id: str) -> list[str]:
+	neighbors: list[str] = []
+	for neighbor_id in storage.neighbors(node_id):
+		if _is_non_propagating_edge(storage, node_id, neighbor_id):
+			continue
+		if _is_default_sa_secret_read_edge(storage, node_id, neighbor_id):
+			continue
+		neighbors.append(neighbor_id)
+
+	# In practice, sidecars often share service accounts with their parent pod.
+	# Apply this only for the initial source expansion to avoid over-expansion.
+	if node_id == source_id:
+		for sibling_id in _pod_siblings_via_shared_service_account(storage, node_id):
+			if sibling_id not in neighbors:
+				neighbors.append(sibling_id)
+
+	return neighbors
+
+
+def _pod_siblings_via_shared_service_account(storage: GraphStorage, pod_id: str) -> list[str]:
+	graph = _raw_graph(storage)
+	if graph is None or _node_type(pod_id) != "Pod":
+		return []
+
+	service_accounts: set[str] = set()
+	for _, target_id in graph.out_edges(pod_id):
+		relationship = _edge_relationship(graph, pod_id, target_id)
+		if relationship not in SERVICE_ACCOUNT_LINK_RELATIONSHIPS:
+			continue
+		if _node_type(target_id) == "ServiceAccount":
+			service_accounts.add(target_id)
+
+	if not service_accounts:
+		return []
+
+	siblings: set[str] = set()
+	for sa_id in service_accounts:
+		for source_id, _ in graph.in_edges(sa_id):
+			if source_id == pod_id or _node_type(source_id) != "Pod":
+				continue
+			relationship = _edge_relationship(graph, source_id, sa_id)
+			if relationship in SERVICE_ACCOUNT_LINK_RELATIONSHIPS:
+				siblings.add(source_id)
+
+	return sorted(siblings)
+
+
+def _is_non_propagating_edge(storage: GraphStorage, source_id: str, target_id: str) -> bool:
+	graph = _raw_graph(storage)
+	if graph is None:
+		return False
+	return _edge_relationship(graph, source_id, target_id) in NON_PROPAGATING_RELATIONSHIPS
+
+
+def _is_default_sa_secret_read_edge(storage: GraphStorage, source_id: str, target_id: str) -> bool:
+	graph = _raw_graph(storage)
+	if graph is None:
+		return False
+	if _node_type(source_id) != "ServiceAccount" or _node_type(target_id) != "Secret":
+		return False
+	if _node_name(source_id) != "default":
+		return False
+	return _edge_relationship(graph, source_id, target_id) == "can-read"
+
+
+def _raw_graph(storage: GraphStorage):
+	getter = getattr(storage, "raw_graph", None)
+	if callable(getter):
+		return getter()
+	return None
+
+
+def _edge_relationship(graph, source_id: str, target_id: str) -> str:
+	edge_data = graph.get_edge_data(source_id, target_id) or {}
+	relationship = str(edge_data.get("relationship_type") or "").strip().lower()
+	return relationship.replace("_", "-")
+
+
+def _node_type(node_id: str) -> str:
+	parts = str(node_id).split(":", 2)
+	if len(parts) == 3:
+		return parts[0]
+	return ""
+
+
+def _node_name(node_id: str) -> str:
+	parts = str(node_id).split(":", 2)
+	if len(parts) == 3:
+		return parts[2]
+	return str(node_id)
 
 
 def _reconstruct_path(parents: dict[str, str], source_id: str, target_id: str) -> list[str]:
