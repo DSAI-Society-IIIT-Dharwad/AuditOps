@@ -131,6 +131,40 @@ class TestCliFormatter(unittest.TestCase):
 		self.assertIn("New attack path(s) detected since previous scan", text)
 		self.assertIn("SUMMARY", text)
 
+	def test_structured_report_shows_cve_when_cvss_is_missing(self) -> None:
+		report = {
+			"metadata": {"generated_at": "2026-04-04 12:00:00", "nodes": 2, "edges": 1},
+			"attack_paths": [
+				{
+					"hops": 1,
+					"risk_score": 5.0,
+					"path": ["User:default:dev-1", "Pod:default:web"],
+					"edges": [
+						{
+							"source": "User:default:dev-1",
+							"target": "Pod:default:web",
+							"relationship": "can-exec",
+							"cve": "CVE-2099-0001",
+							"cvss": None,
+						}
+					],
+				}
+			],
+			"blast_radius_by_source": [],
+			"cycles": [],
+			"baseline_attack_paths": 0,
+			"critical_nodes": [],
+			"summary": {
+				"attack_paths_found": 1,
+				"cycles_found": 0,
+				"blast_nodes_exposed": 0,
+				"critical_node": "none",
+			},
+		}
+
+		text = CliFormatter().format_report(report)
+		self.assertIn("[CVE-2099-0001]", text)
+
 
 if __name__ == "__main__":
 	unittest.main()

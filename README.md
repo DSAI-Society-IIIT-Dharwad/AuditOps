@@ -81,6 +81,22 @@ cd ..
 diff -u tests/sample-output.txt tests/actual-output.txt
 ```
 
+Optional: control Section 1 attack-path output size (`--attack-path-output`, default: `all`):
+
+- Show top 6 rows (lowest risk first):
+
+```bash
+cd tool
+uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --full-report --attack-path-output six
+```
+
+- Show all detected rows:
+
+```bash
+cd tool
+uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --full-report --attack-path-output all
+```
+
 Notes for `tests/mock-cluster-graph.json`:
 
 - `metadata.pre_planted_paths = 6` means six canonical attack chains were intentionally planted in the fixture.

@@ -65,11 +65,12 @@ def main() -> int:
         sink_ids=sink_ids,
         max_depth=args.max_depth,
     )
-    attack_paths = _enumerate_best_attack_paths(
+    attack_paths_all = _enumerate_best_attack_paths(
         storage,
         source_ids=source_ids,
         sink_ids=sink_ids,
     )
+    attack_paths = _select_attack_paths_for_output(attack_paths_all, args.attack_path_output)
     blast_result = calculate_blast_radius(storage, source_id=source_id, max_hops=args.max_hops)
     blast_radius_by_source = _calculate_blast_radius_by_source(storage, source_ids=source_ids, max_hops=args.max_hops)
     cycles = detect_cycles(storage)
@@ -244,6 +245,12 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--max-hops", type=int, default=3, help="Max hops for blast radius BFS")
     parser.add_argument("--max-depth", type=int, default=8, help="Max DFS depth used in critical-node path counting")
+    parser.add_argument(
+        "--attack-path-output",
+        choices=("all", "six"),
+        default="all",
+        help="Controls attack-path section size: all detected paths or only top 6 (lowest risk).",
+    )
     parser.add_argument(
         "--full-report",
         action="store_true",
@@ -539,6 +546,12 @@ def _sort_attack_paths(paths: list[dict[str, Any]]) -> list[dict[str, Any]]:
             tuple(str(node_id) for node_id in row.get("path", [])),
         ),
     )
+
+
+def _select_attack_paths_for_output(attack_paths: list[dict[str, Any]], mode: str) -> list[dict[str, Any]]:
+    if mode == "six":
+        return list(attack_paths[:6])
+    return list(attack_paths)
 
 
 def _calculate_blast_radius_by_source(

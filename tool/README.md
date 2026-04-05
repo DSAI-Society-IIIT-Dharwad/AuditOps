@@ -229,6 +229,12 @@ All core algorithms are directly invokable via named flags:
 # Full report (default if no mode flag is set)
 uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --full-report
 
+# Full report with only top 6 attack paths shown in Section 1
+uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --full-report --attack-path-output six
+
+# Full report with all detected attack paths shown in Section 1
+uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --full-report --attack-path-output all
+
 # Dijkstra shortest attack path (set source/target explicitly)
 uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --source User:default:dev-1 --target Database:data:production-db
 
@@ -348,6 +354,7 @@ uv run python src/main.py --graph-in out/vulnerable-graph.json --pdf-out out/rep
 | `--namespace` | `None` | Namespace scope for kubectl ingestion and source/sink auto-selection. |
 | `--max-hops` | `3` | BFS hop limit for blast-radius analysis. |
 | `--max-depth` | `8` | DFS depth bound for critical-node path counting on cyclic graphs. |
+| `--attack-path-output` | `all` | Attack-path output size in full report: `all` or `six` (top 6 by risk ascending). |
 | `--full-report` | `false` | Force full multi-section report rendering. Also default behavior when no mode flag is set. |
 | `--attack-path` | `false` | Render focused Dijkstra attack-path section. |
 | `--blast-radius` | `false` | Render focused BFS blast-radius section. |
@@ -364,6 +371,7 @@ Use this section as a submission checklist that maps rubric items to concrete im
 | Build and replay normalized graph artifact | `src/graph/networkx_builder.py`, `src/main.py` (`--graph-out`, `--graph-in`) | `uv run python -m unittest test/test_networkx_builder.py test/test_main_export.py -v` |
 | BFS blast-radius analysis | `src/analysis/blast_radius.py`, CLI mode `--blast-radius` | `uv run python -m unittest test/test_blast_radius.py -v` |
 | Dijkstra shortest attack path | `src/analysis/shortest_path.py`, CLI mode `--attack-path` | `uv run python -m unittest test/test_shortest_path.py -v` |
+| Attack path output accuracy (sequence, hops, risk sum, CVE labels, sort order) | `src/main.py` (`_enumerate_best_attack_paths`), `src/reporting/cli_formatter.py` | `uv run python -m unittest test/test_attack_path_accuracy.py -v` |
 | DFS cycle detection | `src/analysis/cycle_detect.py`, CLI mode `--cycles` | `uv run python -m unittest test/test_cycle_detect.py -v` |
 | Critical-node disruption analysis | `src/analysis/critical_node.py`, CLI mode `--critical-node` | `uv run python -m unittest test/test_critical_node.py -v` |
 | Focused per-algorithm CLI rendering | `src/main.py` (`_selected_report_modes`, `_select_report_view`) | `uv run python -m unittest test/test_main_cli_modes.py -v` |

@@ -20,6 +20,22 @@ main_mod = importlib.import_module("main")
 
 
 class TestMainCliModes(unittest.TestCase):
+    def test_select_attack_paths_for_output_all_returns_full_list(self) -> None:
+        rows = [{"risk_score": float(idx)} for idx in range(8)]
+
+        selected = main_mod._select_attack_paths_for_output(rows, "all")
+
+        self.assertEqual(len(selected), 8)
+        self.assertEqual(selected, rows)
+
+    def test_select_attack_paths_for_output_six_limits_rows(self) -> None:
+        rows = [{"risk_score": float(idx)} for idx in range(8)]
+
+        selected = main_mod._select_attack_paths_for_output(rows, "six")
+
+        self.assertEqual(len(selected), 6)
+        self.assertEqual(selected, rows[:6])
+
     def test_selected_report_modes_defaults_to_full_report(self) -> None:
         args = SimpleNamespace(
             full_report=False,
@@ -116,6 +132,68 @@ class TestMainCliModes(unittest.TestCase):
         )
 
         self.assertEqual(set(report.keys()), {"attack_path", "recommendations", "temporal"})
+
+    def test_main_full_report_attack_path_output_six_limits_structured_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            graph_in = root / "in.json"
+            graph_out = root / "out.json"
+            graph_in.write_text(json.dumps(self._graph_fixture_payload()), encoding="utf-8")
+
+            synthetic_paths = [
+                {
+                    "source": "Pod:demo:entry",
+                    "target": "Secret:demo:crown",
+                    "path": ["Pod:demo:entry", "Secret:demo:crown"],
+                    "hops": 1,
+                    "risk_score": float(idx + 1),
+                    "severity": "LOW",
+                    "edges": [
+                        {
+                            "source": "Pod:demo:entry",
+                            "target": "Secret:demo:crown",
+                            "relationship": "can_read",
+                            "weight": float(idx + 1),
+                            "cve": None,
+                            "cvss": None,
+                        }
+                    ],
+                }
+                for idx in range(9)
+            ]
+
+            captured: list[dict[str, object]] = []
+
+            def _capture(report: dict[str, object]) -> str:
+                captured.append(report)
+                return "ok\n"
+
+            argv = [
+                "main.py",
+                "--graph-in",
+                str(graph_in),
+                "--graph-out",
+                str(graph_out),
+                "--snapshot-dir",
+                str(root / "snapshots"),
+                "--full-report",
+                "--attack-path-output",
+                "six",
+            ]
+
+            with patch.object(main_mod, "_enumerate_best_attack_paths", return_value=synthetic_paths), patch.object(
+                main_mod,
+                "render_cli_report",
+                side_effect=_capture,
+            ), patch.object(sys, "argv", argv), patch.object(main_mod.sys, "stdout", new=io.StringIO()):
+                code = main_mod.main()
+
+            self.assertEqual(code, 0)
+            self.assertEqual(len(captured), 1)
+            rendered_report = captured[0]
+            self.assertIn("attack_paths", rendered_report)
+            self.assertEqual(len(rendered_report["attack_paths"]), 6)
+            self.assertEqual(rendered_report["summary"]["attack_paths_found"], 6)
 
     def test_cli_entrypoint_unknown_node_returns_non_zero_and_human_readable_error(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

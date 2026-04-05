@@ -110,8 +110,11 @@ class CliFormatter:
 				segment = f"  {source_label}  --[{relation}]-->  {target_label}"
 				cve = str(edge.get("cve") or "").strip()
 				cvss = edge.get("cvss")
-				if cve and cvss is not None:
-					segment += f"  [{cve}, CVSS {self._as_float(cvss):.1f}]"
+				if cve:
+					if cvss is not None:
+						segment += f"  [{cve}, CVSS {self._as_float(cvss):.1f}]"
+					else:
+						segment += f"  [{cve}]"
 				lines.append(segment)
 
 		lines.append("")
