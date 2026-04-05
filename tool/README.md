@@ -255,6 +255,13 @@ Expected output snippets:
 - Cycle mode: `Cycles: <count>`
 - Critical-node mode: `Critical Node: <node>` and path-disruption metrics
 
+Structured full-report readability contract:
+
+- Section 1 through Summary are explicitly labeled and ordered.
+- Each path block includes: Source, Target, Hops, Risk Score, and Severity label.
+- Severity thresholds: `LOW < 9`, `MEDIUM >= 9`, `HIGH >= 11`, `CRITICAL >= 20`.
+- Section 4 includes actionable remediation language (recommended node/binding to remove).
+
 CLI behavior contract:
 
 - `--help` prints usage text and exits with code `0`.

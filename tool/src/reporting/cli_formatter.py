@@ -96,10 +96,20 @@ class CliFormatter:
 			lines.append("  ✓  0 attack path(s) detected")
 
 		for index, path in enumerate(attack_paths, start=1):
-			hops = self._as_int(path.get("hops"), default=max(0, len(self._as_sequence(path.get("path"))) - 1))
+			path_nodes = self._as_sequence(path.get("path"))
+			hops = self._as_int(path.get("hops"), default=max(0, len(path_nodes) - 1))
 			risk = self._as_float(path.get("risk_score"))
+			source_node = path.get("source")
+			target_node = path.get("target")
+			if source_node is None and path_nodes:
+				source_node = path_nodes[0]
+			if target_node is None and path_nodes:
+				target_node = path_nodes[-1]
+			source_label = self._structured_node_label(source_node)
+			target_label = self._structured_node_label(target_node)
 			lines.append("")
 			lines.append(f"  Path #{index}  |  {hops} hops  |  Risk Score: {risk:.1f}  [{self._risk_level(risk)}]")
+			lines.append(f"  Source: {source_label}  |  Target: {target_label}")
 			lines.append(section_sep)
 
 			edges_in_path = [self._as_mapping(item) for item in self._as_sequence(path.get("edges"))]

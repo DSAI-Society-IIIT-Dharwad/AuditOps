@@ -165,6 +165,49 @@ class TestCliFormatter(unittest.TestCase):
 		text = CliFormatter().format_report(report)
 		self.assertIn("[CVE-2099-0001]", text)
 
+	def test_structured_report_includes_source_and_target_per_path(self) -> None:
+		report = {
+			"metadata": {"generated_at": "2026-04-04 12:00:00", "nodes": 2, "edges": 1},
+			"attack_paths": [
+				{
+					"source": "User:default:dev-1",
+					"target": "Secret:default:db",
+					"hops": 1,
+					"risk_score": 11.5,
+					"path": ["User:default:dev-1", "Secret:default:db"],
+					"edges": [
+						{
+							"source": "User:default:dev-1",
+							"target": "Secret:default:db",
+							"relationship": "can-read",
+						}
+					],
+				}
+			],
+			"blast_radius_by_source": [],
+			"cycles": [],
+			"baseline_attack_paths": 0,
+			"critical_nodes": [],
+			"summary": {
+				"attack_paths_found": 1,
+				"cycles_found": 0,
+				"blast_nodes_exposed": 0,
+				"critical_node": "none",
+			},
+		}
+
+		text = CliFormatter().format_report(report)
+		self.assertIn("Source: dev-1 (User)  |  Target: db (Secret)", text)
+
+	def test_risk_threshold_labels_match_spec(self) -> None:
+		formatter = CliFormatter()
+		self.assertEqual(formatter._risk_level(8.9), "LOW")
+		self.assertEqual(formatter._risk_level(9.0), "MEDIUM")
+		self.assertEqual(formatter._risk_level(10.9), "MEDIUM")
+		self.assertEqual(formatter._risk_level(11.0), "HIGH")
+		self.assertEqual(formatter._risk_level(19.9), "HIGH")
+		self.assertEqual(formatter._risk_level(20.0), "CRITICAL")
+
 
 if __name__ == "__main__":
 	unittest.main()

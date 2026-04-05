@@ -103,6 +103,13 @@ Notes for `tests/mock-cluster-graph.json`:
 - The full report enumerates all shortest source-to-sink attack paths under current graph weights, so the same fixture currently reports 18 attack paths.
 - Four planted chains appear exactly, and two are represented by lower-cost variants due to shortcut edges in the same fixture.
 
+Report structure guarantees (readability rubric):
+
+- Sections are explicitly labeled: Attack Paths, Blast Radius, Cycles, Critical Node, and Summary.
+- Each attack path row includes source, target, hops, risk score, and severity label.
+- Severity thresholds are applied as: `LOW < 9`, `MEDIUM >= 9`, `HIGH >= 11`, `CRITICAL >= 20`.
+- Remediation language is actionable in Section 4 recommendation text.
+
 ## Documentation Entry Points
 
 - Backend details and API reference: [tool/README.md](tool/README.md)
