@@ -104,6 +104,33 @@ NVD source attribution notice (required by NVD terms):
 uv sync
 ```
 
+## Install As System CLI
+
+From this `tool/` directory, install the command into your user tool environment:
+
+```bash
+uv tool install .
+```
+
+For local development with live code edits:
+
+```bash
+uv tool install --editable .
+```
+
+Run the CLI from anywhere:
+
+```bash
+hack2future --help
+h2f --help
+```
+
+Upgrade after changes:
+
+```bash
+uv tool upgrade hack2future-cli
+```
+
 ## Phase 6 API (Backend Server)
 
 The FastAPI bridge used by the frontend is exposed from `src/api/app.py`.

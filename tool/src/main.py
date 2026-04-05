@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from datetime import UTC, datetime
+from importlib import metadata as importlib_metadata
 import json
 from pathlib import Path
 import sys
@@ -172,6 +173,11 @@ def main() -> int:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Kubernetes Attack Path Visualizer")
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"hack2future-cli {_resolve_cli_version()}",
+    )
     parser.add_argument("--ingestor", choices=("kubectl", "mock"), default="kubectl")
     parser.add_argument(
         "--mock-file",
@@ -722,6 +728,13 @@ def _export_pdf_report(report: dict[str, Any], output_path: str | None) -> None:
 
 def _parse_bool_flag(value: str) -> bool:
     return value.strip().lower() == "true"
+
+
+def _resolve_cli_version() -> str:
+    try:
+        return importlib_metadata.version("hack2future-cli")
+    except importlib_metadata.PackageNotFoundError:
+        return "dev"
 
 
 if __name__ == "__main__":

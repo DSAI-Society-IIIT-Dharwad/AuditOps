@@ -27,6 +27,14 @@ The repository contains:
 
 ## Quick Start
 
+### 0) Install CLI Command (Optional)
+
+```bash
+cd tool
+uv tool install .
+hack2future --help
+```
+
 ### 1) Backend API
 
 ```bash
