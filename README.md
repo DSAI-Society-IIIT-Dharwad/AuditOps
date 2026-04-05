@@ -109,7 +109,7 @@ Report structure guarantees (readability rubric):
 - Each attack path row includes source, target, hops, risk score, and severity label.
 - Severity thresholds are applied as: `LOW < 9`, `MEDIUM >= 9`, `HIGH >= 11`, `CRITICAL >= 20`.
 - Each attack path includes a path-specific `Remediation` block (for example patch CVEs, revoke bindings, remove secret-read permissions).
-- Cycle findings include explicit break-cycle remediation guidance.
+- Cycle findings are reported as ordered unique node lists (no duplicate reporting of the same cycle) with explicit break-cycle remediation guidance.
 - Remediation language is actionable in Section 4 recommendation text with estimated impact (`N` paths eliminated).
 
 ## Documentation Entry Points
