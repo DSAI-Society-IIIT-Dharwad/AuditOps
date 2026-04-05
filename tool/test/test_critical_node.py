@@ -21,6 +21,7 @@ Node = models.Node
 Edge = models.Edge
 NetworkXGraphStorage = builder.NetworkXGraphStorage
 identify_critical_node = critical_mod.identify_critical_node
+count_source_to_sink_paths = critical_mod._count_source_to_sink_paths
 MockDataIngestor = mock_parser_mod.MockDataIngestor
 
 
@@ -111,6 +112,64 @@ class TestCriticalNodeRubricCases(unittest.TestCase):
 
 		actual = [(str(row["node_id"]), int(row["paths_removed"])) for row in ranked]
 		self.assertEqual(actual, expected)
+
+	def test_methodology_does_not_mutate_original_graph(self) -> None:
+		storage = NetworkXGraphStorage.from_cluster_graph_data(
+			MockDataIngestor(file_path=ROOT.parent / "tests" / "mock-cluster-graph.json").ingest()
+		)
+		source_ids = main_mod._resolve_source_ids(storage, None, namespace=None)
+		sink_ids = main_mod._resolve_sink_ids(storage, None, namespace=None)
+
+		nodes_before = set(storage.raw_graph().nodes())
+		edges_before = set(storage.raw_graph().edges())
+
+		first = identify_critical_node(storage, source_ids=source_ids, sink_ids=sink_ids, max_depth=8)
+		second = identify_critical_node(storage, source_ids=source_ids, sink_ids=sink_ids, max_depth=8)
+
+		self.assertEqual(set(storage.raw_graph().nodes()), nodes_before)
+		self.assertEqual(set(storage.raw_graph().edges()), edges_before)
+		self.assertIsNotNone(first)
+		self.assertIsNotNone(second)
+		assert first is not None and second is not None
+		self.assertEqual(first.to_dict(), second.to_dict())
+
+	def test_methodology_counts_all_simple_paths_with_cutoff(self) -> None:
+		storage = NetworkXGraphStorage()
+		s = Node(entity_type="User", name="src", namespace="demo", is_source=True)
+		a = Node(entity_type="Role", name="a", namespace="demo")
+		b = Node(entity_type="Role", name="b", namespace="demo")
+		c = Node(entity_type="Role", name="c", namespace="demo")
+		d = Node(entity_type="Role", name="d", namespace="demo")
+		t = Node(entity_type="Secret", name="sink", namespace="demo", is_sink=True)
+		storage.add_nodes([s, a, b, c, d, t])
+		storage.add_edges(
+			[
+				Edge(source_id=s.node_id, target_id=a.node_id, relationship_type="to"),
+				Edge(source_id=a.node_id, target_id=t.node_id, relationship_type="to"),
+				Edge(source_id=s.node_id, target_id=b.node_id, relationship_type="to"),
+				Edge(source_id=b.node_id, target_id=t.node_id, relationship_type="to"),
+				Edge(source_id=s.node_id, target_id=c.node_id, relationship_type="to"),
+				Edge(source_id=c.node_id, target_id=d.node_id, relationship_type="to"),
+				Edge(source_id=d.node_id, target_id=t.node_id, relationship_type="to"),
+			]
+		)
+
+		source_ids = [s.node_id]
+		sink_ids = [t.node_id]
+
+		# There are 3 simple source->sink paths in total; cutoff 2 excludes the longest one.
+		all_paths_depth_3 = count_source_to_sink_paths(storage.raw_graph(), source_ids, sink_ids, max_depth=3)
+		all_paths_depth_2 = count_source_to_sink_paths(storage.raw_graph(), source_ids, sink_ids, max_depth=2)
+		self.assertEqual(all_paths_depth_3, 3)
+		self.assertEqual(all_paths_depth_2, 2)
+
+		result_depth_3 = identify_critical_node(storage, source_ids=source_ids, sink_ids=sink_ids, max_depth=3)
+		result_depth_2 = identify_critical_node(storage, source_ids=source_ids, sink_ids=sink_ids, max_depth=2)
+		self.assertIsNotNone(result_depth_3)
+		self.assertIsNotNone(result_depth_2)
+		assert result_depth_3 is not None and result_depth_2 is not None
+		self.assertEqual(result_depth_3.total_paths_before, 3)
+		self.assertEqual(result_depth_2.total_paths_before, 2)
 
 
 if __name__ == "__main__":
