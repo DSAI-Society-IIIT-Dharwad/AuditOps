@@ -60,6 +60,11 @@ class Node:
 		object.__setattr__(self, "namespace", normalized_namespace)
 		object.__setattr__(self, "node_id", f"{self.entity_type}:{self.namespace}:{self.name}")
 
+	@property
+	def cves(self) -> tuple[str, ...]:
+		"""Compatibility alias for legacy payloads that use `cves` per node."""
+		return self.nvd_cve_ids
+
 
 @dataclass(slots=True, frozen=True)
 class Edge:

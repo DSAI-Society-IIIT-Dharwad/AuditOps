@@ -41,6 +41,7 @@ class TestMockDataIngestor(unittest.TestCase):
 					"namespace": "cluster",
 					"risk_score": 5.0,
 					"is_source": True,
+					"cves": ["CVE-2026-1001"],
 				},
 				{
 					"entity_type": "Secret",
@@ -68,6 +69,9 @@ class TestMockDataIngestor(unittest.TestCase):
 		self.assertEqual(len(graph.nodes), 2)
 		self.assertEqual(len(graph.edges), 1)
 		self.assertEqual(graph.edges[0].relationship_type, "can_read")
+		user = next(node for node in graph.nodes if node.node_id == "User:cluster:dev-1")
+		self.assertEqual(user.cves, ("CVE-2026-1001",))
+		self.assertEqual(user.nvd_cve_ids, ("CVE-2026-1001",))
 
 	def test_normalized_payload_with_missing_node_reference_fails(self) -> None:
 		payload = {

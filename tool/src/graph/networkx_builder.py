@@ -114,6 +114,7 @@ class NetworkXGraphStorage(GraphStorage):
 				"risk_score": node.risk_score,
 				"is_source": node.is_source,
 				"is_sink": node.is_sink,
+				"cves": list(node.cves),
 				"nvd_enriched": node.nvd_enriched,
 				"nvd_source": node.nvd_source,
 				"nvd_max_cvss": node.nvd_max_cvss,
@@ -234,7 +235,7 @@ def _node_from_export_row(row: dict[str, Any]) -> Node:
 			if row.get("nvd_max_cvss") is not None
 			else (float(row["nvdMaxCvss"]) if row.get("nvdMaxCvss") is not None else None)
 		),
-		nvd_cve_ids=_string_tuple_from_row(row, "nvd_cve_ids", "nvdCveIds"),
+		nvd_cve_ids=_string_tuple_from_row(row, "nvd_cve_ids", "nvdCveIds", "cves"),
 		nvd_image_refs=_string_tuple_from_row(row, "nvd_image_refs", "nvdImageRefs"),
 	)
 	return node
@@ -245,6 +246,11 @@ def _string_tuple_from_row(row: dict[str, Any], *keys: str) -> tuple[str, ...]:
 		value = row.get(key)
 		if isinstance(value, list):
 			return tuple(str(item).strip() for item in value if str(item).strip())
+		if isinstance(value, str):
+			parts = [token.strip() for token in value.replace(";", ",").split(",")]
+			normalized = tuple(token for token in parts if token)
+			if normalized:
+				return normalized
 	return ()
 
 

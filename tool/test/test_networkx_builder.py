@@ -125,7 +125,14 @@ class TestNetworkXGraphStorage(unittest.TestCase):
 		self.assertEqual(raw.__class__.__name__, "DiGraph")
 
 	def test_json_round_trip_preserves_nodes_edges_and_metadata(self) -> None:
-		source = Node(entity_type="Pod", name="web", namespace="default", risk_score=7.5, is_source=True)
+		source = Node(
+			entity_type="Pod",
+			name="web",
+			namespace="default",
+			risk_score=7.5,
+			is_source=True,
+			nvd_cve_ids=("CVE-2026-4242",),
+		)
 		target = Node(entity_type="Secret", name="db-creds", namespace="default", risk_score=9.0, is_sink=True)
 		edge = Edge(
 			source_id=source.node_id,
@@ -146,8 +153,8 @@ class TestNetworkXGraphStorage(unittest.TestCase):
 			loaded = NetworkXGraphStorage.from_json_file(artifact)
 
 		self.assertEqual(
-			{(n.node_id, n.risk_score, n.is_source, n.is_sink) for n in storage.all_nodes()},
-			{(n.node_id, n.risk_score, n.is_source, n.is_sink) for n in loaded.all_nodes()},
+			{(n.node_id, n.risk_score, n.is_source, n.is_sink, n.cves) for n in storage.all_nodes()},
+			{(n.node_id, n.risk_score, n.is_source, n.is_sink, n.cves) for n in loaded.all_nodes()},
 		)
 		self.assertEqual(
 			{(e.source_id, e.target_id, e.relationship_type, e.weight, e.cve, e.cvss) for e in storage.all_edges()},
@@ -209,6 +216,7 @@ class TestNetworkXGraphStorage(unittest.TestCase):
 					"risk_score": 1.0,
 					"is_source": True,
 					"is_sink": False,
+					"cves": ["CVE-2026-7777"],
 				},
 				{
 					"id": "secret-db",
@@ -239,6 +247,8 @@ class TestNetworkXGraphStorage(unittest.TestCase):
 		self.assertEqual(len(edges), 1)
 		self.assertEqual(edges[0].source_id, "Pod:default:web")
 		self.assertEqual(edges[0].target_id, "Secret:default:db-creds")
+		nodes_by_id = {node.node_id: node for node in loaded.all_nodes()}
+		self.assertEqual(nodes_by_id["Pod:default:web"].cves, ("CVE-2026-7777",))
 
 
 if __name__ == "__main__":

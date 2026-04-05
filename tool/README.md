@@ -51,6 +51,8 @@ Notes:
 - Explicit Pod CVSS annotations still take precedence over live lookup.
 - NVD rate limits apply (an API key is recommended).
 - Set `NVD_API_KEY` in your environment or pass `--nvd-api-key`.
+- Legacy normalized node payloads that use `cves` are accepted as a compatibility alias for `nvd_cve_ids`.
+- Exported graph artifacts include both `nvd_cve_ids` (canonical) and `cves` (compatibility) on each node.
 
 NVD source attribution notice (required by NVD terms):
 

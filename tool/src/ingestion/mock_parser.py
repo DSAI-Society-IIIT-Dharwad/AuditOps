@@ -121,6 +121,7 @@ def _node_from_row(row: Mapping[str, Any]) -> Node:
 		risk_score=risk_score,
 		is_source=is_source,
 		is_sink=is_sink,
+		nvd_cve_ids=_string_tuple_from_row(row, "nvd_cve_ids", "nvdCveIds", "cves"),
 	)
 	return node
 
@@ -173,4 +174,17 @@ def _text_value(value: Any) -> str:
 	if value is None:
 		return ""
 	return str(value).strip()
+
+
+def _string_tuple_from_row(row: Mapping[str, Any], *keys: str) -> tuple[str, ...]:
+	for key in keys:
+		value = row.get(key)
+		if isinstance(value, list):
+			return tuple(str(item).strip() for item in value if str(item).strip())
+		if isinstance(value, str):
+			parts = [token.strip() for token in value.replace(";", ",").split(",")]
+			normalized = tuple(token for token in parts if token)
+			if normalized:
+				return normalized
+	return ()
 
