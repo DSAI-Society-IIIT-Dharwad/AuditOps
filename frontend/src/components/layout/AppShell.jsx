@@ -23,6 +23,9 @@ export default function AppShell({ children }) {
           <NavLink to="/risks" className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}>
             Analyze
           </NavLink>
+          <NavLink to="/snapshots" className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}>
+            Snapshots
+          </NavLink>
         </nav>
 
         <button className="sidebar-action" onClick={() => refreshAnalysis()} disabled={loading}>

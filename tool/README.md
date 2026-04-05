@@ -2,13 +2,13 @@
 
 Command-line analyzer for Kubernetes privilege escalation paths.
 
-It ingest cluster state, builds a directed graph of trust and permission relationships, runs security analysis algorithms, prints a kill-chain style CLI report, and can export both JSON and PDF artifacts.
+It ingests cluster state, builds a directed graph of trust and permission relationships, runs security analysis algorithms, prints a kill-chain style CLI report, and can export both JSON and PDF artifacts.
 
 ## Quick Access
 
 For a fast copy-paste command reference, use [FASTSTART.md](FASTSTART.md).
 
-## Current Scope (Phases 2-5)
+## Current Scope (Phases 2-6)
 
 - Data ingestion from live `kubectl` or mock JSON.
 - Deterministic normalized graph export (`cluster-graph.json` by default).
@@ -21,6 +21,8 @@ For a fast copy-paste command reference, use [FASTSTART.md](FASTSTART.md).
 - Reporting:
 	- Compact kill-chain CLI output
 	- PDF export (`--pdf-out`)
+	- Temporal snapshot diff detection across scans
+	- Snapshot management APIs (list, detail, rollback)
 
 ## Phase 4 Risk and Penalty Logic
 
@@ -136,6 +138,34 @@ curl "http://localhost:8000/api/v1/graph-analysis?namespace=vulnerable-ns&includ
 The response now also includes a top-level `temporal` object and `report.temporal`
 with consecutive-scan diff results and new attack-path alerts.
 
+### Snapshot management endpoints
+
+List snapshots:
+
+```bash
+curl "http://localhost:8000/api/v1/snapshots?namespace=vulnerable-ns&limit=50"
+```
+
+Get snapshot detail by scope and timestamp:
+
+```bash
+curl "http://localhost:8000/api/v1/snapshots/api-upload__payload__vulnerable-ns__cluster-rbac__nvd-off/20260405T120000000000Z"
+```
+
+Rollback to a previous snapshot (promotes it to latest baseline in same scope):
+
+```bash
+curl -X POST "http://localhost:8000/api/v1/snapshots/api-upload__payload__vulnerable-ns__cluster-rbac__nvd-off/20260405T120000000000Z/rollback" \
+	-H "Content-Type: application/json" \
+	-d '{"reason":"restore baseline"}'
+```
+
+Rollback semantics:
+
+- Rollback does not mutate live cluster resources.
+- Rollback writes a new latest snapshot using the selected historical payload.
+- Subsequent temporal diff comparisons use that promoted snapshot as baseline.
+
 Common namespace checks:
 
 - `namespace=vulnerable-ns`
@@ -198,6 +228,7 @@ Temporal analysis is now automatic on every scan.
 - Scope key includes namespace, RBAC mode, ingestor mode, and NVD toggle.
 - Current scan is diffed against the immediately previous snapshot in the same scope.
 - Alert is raised when a source can reach a sink now but could not in the previous snapshot.
+- Structured CLI report renders Section 5 only when new temporal alerts or new paths exist.
 
 Default snapshot location:
 
@@ -240,13 +271,13 @@ uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-grap
 Run from this `tool/` directory:
 
 ```bash
-uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json > actual-output.txt
+uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json > ../tests/actual-output.txt
 ```
 
 Check parity against provided sample output:
 
 ```bash
-cd .. && diff -u sample-output.txt actual-output.txt
+cd .. && diff -u tests/sample-output.txt tests/actual-output.txt
 ```
 
 ### Replay from exported graph JSON

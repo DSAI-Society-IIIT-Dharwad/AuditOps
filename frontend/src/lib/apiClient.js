@@ -76,6 +76,84 @@ export async function fetchGraphAnalysisFromContent({
   return parseGraphAnalysisResponse(response, { namespace });
 }
 
+export async function fetchSnapshots({
+  scopeId,
+  namespace,
+  ingestor,
+  source,
+  includeClusterRbac,
+  enableNvdScoring,
+  limit = 200,
+} = {}) {
+  const query = new URLSearchParams();
+  if (scopeId) {
+    query.set("scope_id", String(scopeId));
+  }
+  if (namespace) {
+    query.set("namespace", String(namespace));
+  }
+  if (ingestor) {
+    query.set("ingestor", String(ingestor));
+  }
+  if (source) {
+    query.set("source", String(source));
+  }
+  if (typeof includeClusterRbac === "boolean") {
+    query.set("include_cluster_rbac", String(includeClusterRbac));
+  }
+  if (typeof enableNvdScoring === "boolean") {
+    query.set("enable_nvd_scoring", String(enableNvdScoring));
+  }
+  query.set("limit", String(limit));
+
+  let response;
+  try {
+    response = await fetch(`${API_BASE}/snapshots?${query.toString()}`);
+  } catch (_err) {
+    throw new GraphApiError("Could not reach backend API.", {
+      kind: "network",
+      detail: "The API server may be down or unreachable.",
+    });
+  }
+
+  const payload = await parseSnapshotResponse(response, "Failed to load snapshots.");
+  return Array.isArray(payload.items) ? payload.items : [];
+}
+
+export async function fetchSnapshotDetail({ scopeId, snapshotTimestamp }) {
+  let response;
+  try {
+    response = await fetch(`${API_BASE}/snapshots/${encodeURIComponent(scopeId)}/${encodeURIComponent(snapshotTimestamp)}`);
+  } catch (_err) {
+    throw new GraphApiError("Could not reach backend API.", {
+      kind: "network",
+      detail: "The API server may be down or unreachable.",
+    });
+  }
+
+  return parseSnapshotResponse(response, "Failed to load snapshot detail.");
+}
+
+export async function rollbackSnapshot({ scopeId, snapshotTimestamp, reason }) {
+  let response;
+  try {
+    response = await fetch(`${API_BASE}/snapshots/${encodeURIComponent(scopeId)}/${encodeURIComponent(snapshotTimestamp)}/rollback`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ reason: reason || null }),
+    });
+  } catch (_err) {
+    throw new GraphApiError("Could not reach backend API.", {
+      kind: "network",
+      detail: "The API server may be down or unreachable.",
+    });
+  }
+
+  return parseSnapshotResponse(response, "Failed to rollback snapshot.");
+}
+
 async function parseGraphAnalysisResponse(response, { namespace }) {
   if (!response.ok) {
     const errorPayload = await response.json().catch(() => ({}));
@@ -121,4 +199,17 @@ async function parseGraphAnalysisResponse(response, { namespace }) {
   }
 
   return payload;
+}
+
+async function parseSnapshotResponse(response, fallbackMessage) {
+  if (!response.ok) {
+    const errorPayload = await response.json().catch(() => ({}));
+    const detail = String(errorPayload.detail || "");
+    throw new GraphApiError(fallbackMessage, {
+      status: response.status,
+      detail: detail || fallbackMessage,
+      kind: "api",
+    });
+  }
+  return response.json();
 }

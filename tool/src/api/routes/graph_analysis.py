@@ -6,10 +6,19 @@ from collections.abc import Mapping
 from fastapi import APIRouter, HTTPException, Query
 import yaml
 
-from api.schemas.graph_analysis import GraphAnalysisIngestRequest, GraphAnalysisResponse
+from api.schemas.graph_analysis import (
+    GraphAnalysisIngestRequest,
+    GraphAnalysisResponse,
+    SnapshotDetailResponse,
+    SnapshotListItem,
+    SnapshotListResponse,
+    SnapshotRollbackRequest,
+    SnapshotRollbackResponse,
+)
 from ingestion.kubectl_runner import KubectlIngestError
 from ingestion.mock_parser import MockParserError
 from services.analysis.graph_analysis_service import get_graph_analysis, get_graph_analysis_from_payload
+from services.temporal import list_snapshots, load_snapshot_payload, rollback_snapshot
 
 router = APIRouter(tags=["graph-analysis"])
 
@@ -76,6 +85,88 @@ def graph_analysis_ingest(request: GraphAnalysisIngestRequest) -> GraphAnalysisR
         raise HTTPException(status_code=500, detail="Unexpected analysis error") from exc
 
     return GraphAnalysisResponse.model_validate(payload)
+
+
+@router.get("/snapshots", response_model=SnapshotListResponse)
+def graph_analysis_snapshots(
+    scope_id: str | None = Query(default=None),
+    namespace: str | None = Query(default=None),
+    ingestor: str | None = Query(default=None),
+    source: str | None = Query(default=None),
+    include_cluster_rbac: bool | None = Query(default=None),
+    enable_nvd_scoring: bool | None = Query(default=None),
+    limit: int = Query(default=200, ge=1, le=1000),
+) -> SnapshotListResponse:
+    try:
+        rows = list_snapshots(limit=limit)
+    except Exception as exc:  # pragma: no cover
+        raise HTTPException(status_code=500, detail="Failed to load snapshots") from exc
+
+    def _match(row: Mapping[str, object]) -> bool:
+        if scope_id and str(row.get("scope_id") or "") != scope_id:
+            return False
+        if namespace and str(row.get("namespace") or "") != namespace:
+            return False
+        if ingestor and str(row.get("ingestor") or "") != ingestor:
+            return False
+        if source and str(row.get("source") or "") != source:
+            return False
+        if include_cluster_rbac is not None and bool(row.get("include_cluster_rbac")) != include_cluster_rbac:
+            return False
+        if enable_nvd_scoring is not None and bool(row.get("enable_nvd_scoring")) != enable_nvd_scoring:
+            return False
+        return True
+
+    items = [
+        SnapshotListItem.model_validate(row)
+        for row in rows
+        if _match(row)
+    ]
+    return SnapshotListResponse(items=items)
+
+
+@router.get("/snapshots/{scope_id}/{snapshot_timestamp}", response_model=SnapshotDetailResponse)
+def graph_analysis_snapshot_detail(scope_id: str, snapshot_timestamp: str) -> SnapshotDetailResponse:
+    try:
+        payload = load_snapshot_payload(scope_id, snapshot_timestamp)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:  # pragma: no cover
+        raise HTTPException(status_code=500, detail="Failed to load snapshot") from exc
+
+    temporal_meta = payload.get("temporal") if isinstance(payload.get("temporal"), Mapping) else {}
+    resolved_timestamp = str(temporal_meta.get("snapshot_timestamp") or snapshot_timestamp)
+
+    return SnapshotDetailResponse(
+        scope_id=scope_id,
+        snapshot_timestamp=resolved_timestamp,
+        payload=payload,
+    )
+
+
+@router.post("/snapshots/{scope_id}/{snapshot_timestamp}/rollback", response_model=SnapshotRollbackResponse)
+def graph_analysis_snapshot_rollback(
+    scope_id: str,
+    snapshot_timestamp: str,
+    request: SnapshotRollbackRequest,
+) -> SnapshotRollbackResponse:
+    try:
+        result = rollback_snapshot(
+            scope_id,
+            snapshot_timestamp,
+            reason=request.reason,
+            actor="api",
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:  # pragma: no cover
+        raise HTTPException(status_code=500, detail="Failed to rollback snapshot") from exc
+
+    return SnapshotRollbackResponse.model_validate(result)
 
 
 def _parse_content_payload(content: str, content_format: str) -> dict[str, object]:

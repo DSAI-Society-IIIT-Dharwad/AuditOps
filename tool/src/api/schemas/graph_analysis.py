@@ -26,3 +26,38 @@ class GraphAnalysisResponse(BaseModel):
     analysis: dict[str, Any]
     temporal: dict[str, Any] = Field(default_factory=dict)
     report: dict[str, Any] = Field(default_factory=dict)
+
+
+class SnapshotListItem(BaseModel):
+    scope_id: str
+    snapshot_timestamp: str
+    namespace: str
+    include_cluster_rbac: bool
+    ingestor: str
+    enable_nvd_scoring: bool
+    source: str
+    node_count: int
+    edge_count: int
+    file_name: str
+    rolled_back_from: str | None = None
+
+
+class SnapshotListResponse(BaseModel):
+    items: list[SnapshotListItem] = Field(default_factory=list)
+
+
+class SnapshotDetailResponse(BaseModel):
+    scope_id: str
+    snapshot_timestamp: str
+    payload: dict[str, Any]
+
+
+class SnapshotRollbackRequest(BaseModel):
+    reason: str | None = None
+
+
+class SnapshotRollbackResponse(BaseModel):
+    scope_id: str
+    rolled_back_from: str
+    snapshot_timestamp: str
+    file_path: str

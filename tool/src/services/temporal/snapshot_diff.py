@@ -56,6 +56,106 @@ def load_previous_snapshot(scope_id: str, *, snapshot_dir: str | None = None) ->
     return _load_snapshot_from_file(candidates[-1], scope_id)
 
 
+def list_snapshots(*, snapshot_dir: str | None = None, limit: int = 200) -> list[dict[str, Any]]:
+    root = _resolve_snapshot_root(snapshot_dir)
+    if not root.exists():
+        return []
+
+    rows: list[dict[str, Any]] = []
+    for scope_path in sorted(root.iterdir()):
+        if not scope_path.is_dir():
+            continue
+        scope_id = scope_path.name
+        for file_path in sorted(scope_path.glob("snapshot-*.json"), reverse=True):
+            payload = _read_snapshot_payload(file_path)
+            temporal_meta = payload.get("temporal") if isinstance(payload.get("temporal"), dict) else {}
+            timestamp = str(temporal_meta.get("snapshot_timestamp") or _timestamp_from_file(file_path))
+            rows.append(
+                {
+                    "scope_id": scope_id,
+                    "snapshot_timestamp": timestamp,
+                    "file_name": file_path.name,
+                    "file_path": str(file_path),
+                    "namespace": str(temporal_meta.get("namespace") or "all"),
+                    "include_cluster_rbac": bool(temporal_meta.get("include_cluster_rbac", True)),
+                    "ingestor": str(temporal_meta.get("ingestor") or "unknown"),
+                    "enable_nvd_scoring": bool(temporal_meta.get("enable_nvd_scoring", False)),
+                    "source": str(temporal_meta.get("source") or "unknown"),
+                    "node_count": len(payload.get("nodes") or []),
+                    "edge_count": len(payload.get("edges") or []),
+                    "rolled_back_from": temporal_meta.get("rolled_back_from"),
+                }
+            )
+
+    rows.sort(
+        key=lambda row: (
+            str(row.get("snapshot_timestamp") or ""),
+            str(row.get("scope_id") or ""),
+        ),
+        reverse=True,
+    )
+
+    if limit > 0:
+        return rows[:limit]
+    return rows
+
+
+def load_snapshot_payload(
+    scope_id: str,
+    snapshot_timestamp: str,
+    *,
+    snapshot_dir: str | None = None,
+) -> dict[str, Any]:
+    path = _find_snapshot_file(scope_id, snapshot_timestamp, snapshot_dir=snapshot_dir)
+    payload = _read_snapshot_payload(path)
+    if not isinstance(payload, dict):
+        raise ValueError(f"snapshot payload must be a JSON object: {path}")
+    return payload
+
+
+def rollback_snapshot(
+    scope_id: str,
+    snapshot_timestamp: str,
+    *,
+    snapshot_dir: str | None = None,
+    reason: str | None = None,
+    actor: str = "api",
+) -> dict[str, Any]:
+    source_path = _find_snapshot_file(scope_id, snapshot_timestamp, snapshot_dir=snapshot_dir)
+    payload = _read_snapshot_payload(source_path)
+    if not isinstance(payload, dict):
+        raise ValueError(f"snapshot payload must be a JSON object: {source_path}")
+
+    temporal_meta = dict(payload.get("temporal") or {})
+    new_timestamp = _snapshot_timestamp()
+    temporal_meta["snapshot_timestamp"] = new_timestamp
+    temporal_meta["scope_id"] = scope_id
+    temporal_meta["rolled_back_from"] = snapshot_timestamp
+    temporal_meta["rollback_actor"] = actor
+    if reason:
+        temporal_meta["rollback_reason"] = reason
+    payload["temporal"] = temporal_meta
+
+    root = _resolve_snapshot_root(snapshot_dir)
+    scope_path = root / scope_id
+    scope_path.mkdir(parents=True, exist_ok=True)
+
+    target_path = scope_path / f"snapshot-{new_timestamp}.json"
+    if target_path.exists():
+        target_path = scope_path / f"snapshot-{new_timestamp}-{os.getpid()}.json"
+
+    with target_path.open("w", encoding="utf-8") as fp:
+        json.dump(payload, fp, indent=2)
+        fp.write("\n")
+
+    return {
+        "scope_id": scope_id,
+        "rolled_back_from": snapshot_timestamp,
+        "snapshot_timestamp": new_timestamp,
+        "file_path": str(target_path),
+    }
+
+
 def save_snapshot(
     graph_data: ClusterGraphData,
     *,
@@ -436,3 +536,39 @@ def _load_snapshot_from_file(path: Path, scope_id: str) -> SnapshotRecord:
         storage=storage,
         metadata=dict(temporal_meta),
     )
+
+
+def _find_snapshot_file(scope_id: str, snapshot_timestamp: str, *, snapshot_dir: str | None = None) -> Path:
+    root = _resolve_snapshot_root(snapshot_dir)
+    scope_path = root / scope_id
+    if not scope_path.exists() or not scope_path.is_dir():
+        raise FileNotFoundError(f"snapshot scope not found: {scope_id}")
+
+    exact_path = scope_path / f"snapshot-{snapshot_timestamp}.json"
+    if exact_path.exists():
+        return exact_path
+
+    for file_path in sorted(scope_path.glob("snapshot-*.json"), reverse=True):
+        if file_path.name.startswith(f"snapshot-{snapshot_timestamp}"):
+            return file_path
+        payload = _read_snapshot_payload(file_path)
+        temporal_meta = payload.get("temporal") if isinstance(payload.get("temporal"), dict) else {}
+        if str(temporal_meta.get("snapshot_timestamp") or "") == snapshot_timestamp:
+            return file_path
+
+    raise FileNotFoundError(f"snapshot not found: {scope_id}/{snapshot_timestamp}")
+
+
+def _read_snapshot_payload(path: Path) -> dict[str, Any]:
+    with path.open("r", encoding="utf-8") as fp:
+        payload = json.load(fp)
+    if not isinstance(payload, dict):
+        raise ValueError(f"snapshot payload must be a JSON object: {path}")
+    return payload
+
+
+def _timestamp_from_file(path: Path) -> str:
+    name = path.stem
+    if name.startswith("snapshot-"):
+        return name.replace("snapshot-", "", 1)
+    return name

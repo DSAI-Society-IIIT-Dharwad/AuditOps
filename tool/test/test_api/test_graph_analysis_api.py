@@ -204,6 +204,83 @@ spec:
         self.assertEqual(response.status_code, 422)
         self.assertIn("Invalid JSON payload", response.json().get("detail", ""))
 
+    @patch("api.routes.graph_analysis.list_snapshots")
+    def test_graph_analysis_snapshots_returns_items(self, list_snapshots_mock) -> None:
+        list_snapshots_mock.return_value = [
+            {
+                "scope_id": "api__kubectl__demo__cluster-rbac__nvd-off",
+                "snapshot_timestamp": "20260405T120000000000Z",
+                "namespace": "demo",
+                "include_cluster_rbac": True,
+                "ingestor": "kubectl",
+                "enable_nvd_scoring": False,
+                "source": "api",
+                "node_count": 5,
+                "edge_count": 4,
+                "file_name": "snapshot-20260405T120000000000Z.json",
+                "file_path": "/tmp/snapshot.json",
+                "rolled_back_from": None,
+            }
+        ]
+
+        response = self.client.get("/api/v1/snapshots?namespace=demo")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn("items", payload)
+        self.assertEqual(len(payload["items"]), 1)
+        self.assertEqual(payload["items"][0]["namespace"], "demo")
+        list_snapshots_mock.assert_called_once_with(limit=200)
+
+    @patch("api.routes.graph_analysis.load_snapshot_payload")
+    def test_graph_analysis_snapshot_detail_returns_payload(self, load_snapshot_payload_mock) -> None:
+        load_snapshot_payload_mock.return_value = {
+            "schema_version": "1.0.0",
+            "nodes": [],
+            "edges": [],
+            "temporal": {
+                "snapshot_timestamp": "20260405T121500000000Z",
+                "scope_id": "api__kubectl__demo__cluster-rbac__nvd-off",
+            },
+        }
+
+        response = self.client.get("/api/v1/snapshots/api__kubectl__demo__cluster-rbac__nvd-off/20260405T121500000000Z")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["scope_id"], "api__kubectl__demo__cluster-rbac__nvd-off")
+        self.assertEqual(payload["snapshot_timestamp"], "20260405T121500000000Z")
+        self.assertIn("payload", payload)
+        load_snapshot_payload_mock.assert_called_once_with(
+            "api__kubectl__demo__cluster-rbac__nvd-off",
+            "20260405T121500000000Z",
+        )
+
+    @patch("api.routes.graph_analysis.rollback_snapshot")
+    def test_graph_analysis_snapshot_rollback_promotes_snapshot(self, rollback_snapshot_mock) -> None:
+        rollback_snapshot_mock.return_value = {
+            "scope_id": "api__kubectl__demo__cluster-rbac__nvd-off",
+            "rolled_back_from": "20260405T100000000000Z",
+            "snapshot_timestamp": "20260405T122500000000Z",
+            "file_path": "/tmp/snapshot-20260405T122500000000Z.json",
+        }
+
+        response = self.client.post(
+            "/api/v1/snapshots/api__kubectl__demo__cluster-rbac__nvd-off/20260405T100000000000Z/rollback",
+            json={"reason": "restore baseline"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["rolled_back_from"], "20260405T100000000000Z")
+        self.assertEqual(payload["snapshot_timestamp"], "20260405T122500000000Z")
+        rollback_snapshot_mock.assert_called_once_with(
+            "api__kubectl__demo__cluster-rbac__nvd-off",
+            "20260405T100000000000Z",
+            reason="restore baseline",
+            actor="api",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
