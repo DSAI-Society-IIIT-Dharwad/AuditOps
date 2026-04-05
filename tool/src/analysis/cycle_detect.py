@@ -7,15 +7,20 @@ from core.interfaces import GraphStorage
 
 def detect_cycles(storage: GraphStorage) -> list[list[str]]:
 	"""Detect directed cycles and return unique cycle lists."""
-	adjacency = storage.as_adjacency()
+	adjacency = {
+		node_id: list(neighbors)
+		for node_id, neighbors in storage.as_adjacency().items()
+	}
 	visited: set[str] = set()
 	stack: list[str] = []
+	stack_index: dict[str, int] = {}
 	in_stack: set[str] = set()
 	seen_cycles: set[tuple[str, ...]] = set()
 	found_cycles: list[list[str]] = []
 
 	def dfs(node_id: str) -> None:
 		visited.add(node_id)
+		stack_index[node_id] = len(stack)
 		stack.append(node_id)
 		in_stack.add(node_id)
 
@@ -23,7 +28,7 @@ def detect_cycles(storage: GraphStorage) -> list[list[str]]:
 			if neighbor not in visited:
 				dfs(neighbor)
 			elif neighbor in in_stack:
-				cycle_start = stack.index(neighbor)
+				cycle_start = stack_index[neighbor]
 				cycle = stack[cycle_start:] + [neighbor]
 				canonical = _canonical_cycle(cycle)
 				if canonical not in seen_cycles:
@@ -31,6 +36,7 @@ def detect_cycles(storage: GraphStorage) -> list[list[str]]:
 					found_cycles.append(cycle)
 
 		stack.pop()
+		stack_index.pop(node_id, None)
 		in_stack.remove(node_id)
 
 	for node_id in sorted(adjacency.keys()):

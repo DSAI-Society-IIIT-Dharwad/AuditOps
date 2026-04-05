@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass
+from dataclasses import field
 
 from core.interfaces import GraphStorage
 
@@ -16,6 +17,7 @@ class BlastRadiusResult:
 	max_hops: int
 	reachable_nodes: list[str]
 	hops_by_node: dict[str, int]
+	paths_by_node: dict[str, list[str]] = field(default_factory=dict)
 
 	@property
 	def count(self) -> int:
@@ -27,6 +29,7 @@ class BlastRadiusResult:
 			"max_hops": self.max_hops,
 			"reachable_nodes": self.reachable_nodes,
 			"hops_by_node": self.hops_by_node,
+			"paths_by_node": self.paths_by_node,
 			"count": self.count,
 		}
 
@@ -40,6 +43,7 @@ def calculate_blast_radius(storage: GraphStorage, source_id: str, max_hops: int 
 
 	visited: set[str] = {source_id}
 	hops_by_node: dict[str, int] = {}
+	parents: dict[str, str] = {}
 	queue: deque[tuple[str, int]] = deque([(source_id, 0)])
 
 	while queue:
@@ -53,13 +57,29 @@ def calculate_blast_radius(storage: GraphStorage, source_id: str, max_hops: int 
 			visited.add(neighbor)
 			next_hops = hops + 1
 			hops_by_node[neighbor] = next_hops
+			parents[neighbor] = current
 			queue.append((neighbor, next_hops))
 
 	reachable = list(hops_by_node.keys())
+	paths_by_node = {
+		node_id: _reconstruct_path(parents, source_id, node_id)
+		for node_id in reachable
+	}
 	return BlastRadiusResult(
 		source=source_id,
 		max_hops=max_hops,
 		reachable_nodes=reachable,
 		hops_by_node=hops_by_node,
+		paths_by_node=paths_by_node,
 	)
+
+
+def _reconstruct_path(parents: dict[str, str], source_id: str, target_id: str) -> list[str]:
+	path: list[str] = [target_id]
+	cursor = target_id
+	while cursor != source_id:
+		cursor = parents[cursor]
+		path.append(cursor)
+	path.reverse()
+	return path
 

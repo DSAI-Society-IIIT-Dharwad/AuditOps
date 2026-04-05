@@ -46,6 +46,8 @@ class TestBlastRadius(unittest.TestCase):
 		self.assertEqual(result.reachable_nodes, [self.b.node_id, self.c.node_id])
 		self.assertEqual(result.hops_by_node[self.b.node_id], 1)
 		self.assertEqual(result.hops_by_node[self.c.node_id], 2)
+		self.assertEqual(result.paths_by_node[self.b.node_id], [self.a.node_id, self.b.node_id])
+		self.assertEqual(result.paths_by_node[self.c.node_id], [self.a.node_id, self.b.node_id, self.c.node_id])
 		self.assertEqual(result.count, 2)
 
 	def test_invalid_source_raises(self) -> None:

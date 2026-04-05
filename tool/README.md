@@ -316,6 +316,12 @@ Check parity against provided sample output:
 cd .. && diff -u tests/sample-output.txt tests/actual-output.txt
 ```
 
+Notes for `tests/mock-cluster-graph.json`:
+
+- `metadata.pre_planted_paths = 6` indicates six canonical attack chains were intentionally planted in the fixture.
+- The full report lists all shortest source-to-sink attack paths under the active graph weights, so this fixture currently reports `18` attack paths.
+- Four planted chains appear exactly, and two are represented by lower-cost variants due to additional shortcut edges in the same graph.
+
 ### Replay from exported graph JSON
 
 ```bash

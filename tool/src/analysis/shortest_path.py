@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from dataclasses import field
 import heapq
 from typing import Any
 
@@ -17,6 +18,8 @@ class ShortestPathResult:
 	target: str
 	path: list[str]
 	total_cost: float
+	visited_nodes: list[str] = field(default_factory=list)
+	explored_edge_count: int = 0
 
 	@property
 	def hops(self) -> int:
@@ -29,6 +32,8 @@ class ShortestPathResult:
 			"path": self.path,
 			"risk_score": self.total_cost,
 			"hops": self.hops,
+			"visited_nodes": self.visited_nodes,
+			"explored_edge_count": self.explored_edge_count,
 		}
 
 
@@ -58,17 +63,21 @@ def dijkstra_shortest_path(
 	previous: dict[str, str] = {}
 	pq: list[tuple[float, str]] = [(0.0, source_id)]
 	visited: set[str] = set()
+	visited_order: list[str] = []
+	explored_edge_count = 0
 
 	while pq:
 		current_cost, current = heapq.heappop(pq)
 		if current in visited:
 			continue
 		visited.add(current)
+		visited_order.append(current)
 
 		if current == target_id:
 			break
 
 		for neighbor in storage.neighbors(current):
+			explored_edge_count += 1
 			if neighbor in visited:
 				continue
 
@@ -94,6 +103,8 @@ def dijkstra_shortest_path(
 		target=target_id,
 		path=_reconstruct_path(previous, source_id, target_id),
 		total_cost=distances[target_id],
+		visited_nodes=visited_order,
+		explored_edge_count=explored_edge_count,
 	)
 
 

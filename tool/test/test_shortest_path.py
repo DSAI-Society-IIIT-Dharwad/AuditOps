@@ -56,6 +56,8 @@ class TestShortestPath(unittest.TestCase):
 		self.assertEqual(result.path, [self.source.node_id, self.mid1.node_id, self.sink1.node_id])
 		# cost: (1 + risk(mid1)=2) + (1 + risk(sink1)=6) = 10
 		self.assertEqual(result.total_cost, 10.0)
+		self.assertGreaterEqual(result.explored_edge_count, 2)
+		self.assertEqual(result.visited_nodes[0], self.source.node_id)
 
 	def test_penalty_changes_total_cost(self) -> None:
 		penalty = {(self.source.node_id, self.mid1.node_id): 3.5}
