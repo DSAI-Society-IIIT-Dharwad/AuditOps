@@ -1,33 +1,53 @@
 # Hack2Future
 
-Kubernetes security analysis platform for finding attack paths, blast radius, cyclic privilege chains, and high-impact remediation points.
+Kubernetes security analysis platform for attack-path discovery, blast-radius analysis, cycle detection, critical-node remediation, and temporal drift tracking.
 
-The repository contains:
+## Dashboard Preview
 
-- Backend analysis engine and API: [tool/README.md](tool/README.md)
-- Frontend dashboard (graph, ingest, risk, snapshots): [frontend/README.md](frontend/README.md)
+![Hack2Future Dashboard](public/image.png)
 
-## Repository Layout
+## Start Here
 
-- [tool](tool): Python analysis engine, FastAPI server, temporal snapshot system
-- [frontend](frontend): React + Vite UI
-- [tests](tests): sample and mock outputs used for report parity checks
+- Backend docs hub: [tool/README.md](tool/README.md)
+- Frontend docs hub: [frontend/README.md](frontend/README.md)
+- Full functionality checklist: [FULL_FUNCTIONALITY_CHECK.md](FULL_FUNCTIONALITY_CHECK.md)
+- PPT-ready project dossier: [PROJECT_PPT_DOSSIER.md](PROJECT_PPT_DOSSIER.md)
 
-## What The Platform Does
+## Find By Task
 
-- Ingests cluster state from live kubectl, uploaded YAML/JSON, or mock files
-- Builds a directed trust/permission graph
-- Runs core analyses:
-	- Shortest attack paths (Dijkstra)
-	- Blast radius (BFS)
-	- Circular permission detection (DFS)
-	- Critical-node disruption ranking
-- Tracks temporal drift between scans via snapshots
-- Supports snapshot browsing and rollback-to-baseline from the UI
+- I want to set up and run the backend quickly: [tool/docs/quickstart-and-setup.md](tool/docs/quickstart-and-setup.md)
+- I want CLI examples for each analysis mode: [tool/docs/cli-modes-and-examples.md](tool/docs/cli-modes-and-examples.md)
+- I want API endpoint and snapshot workflow details: [tool/docs/api-and-snapshots.md](tool/docs/api-and-snapshots.md)
+- I want architecture and algorithm overview: [tool/docs/architecture-and-algorithms.md](tool/docs/architecture-and-algorithms.md)
+- I want graph schema details: [tool/docs/schema-reference.md](tool/docs/schema-reference.md)
+- I want testing commands and rubric mapping: [tool/docs/testing-and-rubric.md](tool/docs/testing-and-rubric.md)
+- I want frontend setup steps: [frontend/docs/getting-started.md](frontend/docs/getting-started.md)
+- I want frontend page and feature map: [frontend/docs/pages-and-features.md](frontend/docs/pages-and-features.md)
+- I want troubleshooting steps: [frontend/docs/troubleshooting.md](frontend/docs/troubleshooting.md)
 
-## Quick Start
+## Documentation Map
 
-### Five-Minute CLI Run (pip install path)
+### Backend (`tool/`)
+
+- Index: [tool/docs/README.md](tool/docs/README.md)
+- Setup: [tool/docs/quickstart-and-setup.md](tool/docs/quickstart-and-setup.md)
+- CLI: [tool/docs/cli-modes-and-examples.md](tool/docs/cli-modes-and-examples.md)
+- API + snapshots: [tool/docs/api-and-snapshots.md](tool/docs/api-and-snapshots.md)
+- Architecture: [tool/docs/architecture-and-algorithms.md](tool/docs/architecture-and-algorithms.md)
+- Graph schema: [tool/docs/schema-reference.md](tool/docs/schema-reference.md)
+- Testing and rubric: [tool/docs/testing-and-rubric.md](tool/docs/testing-and-rubric.md)
+- Fast command sheet: [tool/FASTSTART.md](tool/FASTSTART.md)
+
+### Frontend (`frontend/`)
+
+- Index: [frontend/docs/README.md](frontend/docs/README.md)
+- Getting started: [frontend/docs/getting-started.md](frontend/docs/getting-started.md)
+- Pages and features: [frontend/docs/pages-and-features.md](frontend/docs/pages-and-features.md)
+- Troubleshooting: [frontend/docs/troubleshooting.md](frontend/docs/troubleshooting.md)
+
+## Fast Local Run
+
+Terminal 1 (backend, Linux/macOS):
 
 ```bash
 cd tool
@@ -35,45 +55,21 @@ python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -e .
-hack2future --ingestor mock --mock-file ../tests/mock-cluster-graph.json --full-report
+uvicorn api.app:app --app-dir src --host 0.0.0.0 --port 8000 --reload
 ```
 
-Expected output snippet:
+Terminal 1 (backend, Windows PowerShell):
 
-```text
-[ SECTION 1 — ATTACK PATH DETECTION (Dijkstra) ]
-⚠  18 attack path(s) detected
-[ SECTION 2 — BLAST RADIUS ANALYSIS (BFS, depth=3) ]
-[ SECTION 3 — CIRCULAR PERMISSION DETECTION (DFS) ]
-[ SECTION 4 — CRITICAL NODE ANALYSIS ]
-SUMMARY
-```
-
-For complete CLI examples (including focused modes and expected snippets), see [tool/README.md](tool/README.md).
-
-### 0) Install CLI Command (Optional)
-
-```bash
+```powershell
 cd tool
-uv tool install .
-hack2future --help
+py -3 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -e .
+uvicorn api.app:app --app-dir src --host 0.0.0.0 --port 8000 --reload
 ```
 
-### 1) Backend API
-
-```bash
-cd tool
-uv sync
-uv run uvicorn api.app:app --app-dir src --host 0.0.0.0 --port 8000 --reload
-```
-
-Health check:
-
-```bash
-curl http://localhost:8000/health
-```
-
-### 2) Frontend
+Terminal 2 (frontend):
 
 ```bash
 cd frontend
@@ -88,64 +84,8 @@ Open:
 - http://localhost:5173/risks
 - http://localhost:5173/snapshots
 
-## Snapshot Rollback Semantics
+## Repository Layout
 
-Snapshot rollback does not change cluster resources.
-
-Rollback promotes a chosen historical snapshot into a new latest snapshot in the same scope so future temporal comparisons use that promoted baseline.
-
-## Algorithms At A Glance
-
-- Dijkstra: computes minimum-risk attack path using edge weights.
-- BFS: computes blast radius by hop depth from each source.
-- DFS: detects circular permission chains.
-- Critical-node analysis: ranks node removals by attack-path disruption impact.
-
-## Report Parity
-
-To verify CLI output parity against the sample output:
-
-```bash
-cd tool
-uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json > ../tests/actual-output.txt
-cd ..
-diff -u tests/sample-output.txt tests/actual-output.txt
-```
-
-Optional: control Section 1 attack-path output size (`--attack-path-output`, default: `all`):
-
-- Show top 6 rows (lowest risk first):
-
-```bash
-cd tool
-uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --full-report --attack-path-output six
-```
-
-- Show all detected rows:
-
-```bash
-cd tool
-uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --full-report --attack-path-output all
-```
-
-Notes for `tests/mock-cluster-graph.json`:
-
-- `metadata.pre_planted_paths = 6` means six canonical attack chains were intentionally planted in the fixture.
-- The full report enumerates all shortest source-to-sink attack paths under current graph weights, so the same fixture currently reports 18 attack paths.
-- Four planted chains appear exactly, and two are represented by lower-cost variants due to shortcut edges in the same fixture.
-- Critical-node ranking uses non-source/non-sink candidates only; for the mock dataset the expected top entries are `web-frontend` (-32 of 46) then `api-server` (-24).
-
-Report structure guarantees (readability rubric):
-
-- Sections are explicitly labeled: Attack Paths, Blast Radius, Cycles, Critical Node, and Summary.
-- Each attack path row includes source, target, hops, risk score, and severity label.
-- Severity thresholds are applied as: `LOW < 9`, `MEDIUM >= 9`, `HIGH >= 11`, `CRITICAL >= 20`.
-- Each attack path includes a path-specific `Remediation` block (for example patch CVEs, revoke bindings, remove secret-read permissions).
-- Cycle findings are reported as ordered unique node lists (no duplicate reporting of the same cycle) with explicit break-cycle remediation guidance.
-- Remediation language is actionable in Section 4 recommendation text with estimated impact (`N` paths eliminated).
-
-## Documentation Entry Points
-
-- Backend details and API reference: [tool/README.md](tool/README.md)
-- Cluster graph schema contract: [tool/README.md#schema-reference](tool/README.md#schema-reference)
-- Frontend pages and usage: [frontend/README.md](frontend/README.md)
+- `tool/`: Python engine, API, reporting, temporal snapshots, tests.
+- `frontend/`: React dashboard for graph, ingest, risk, and snapshots.
+- `tests/`: shared fixture and output artifacts.

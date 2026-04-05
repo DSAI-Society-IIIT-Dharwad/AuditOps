@@ -27,25 +27,56 @@ This is a copy-paste guide for the backend analyzer so you can run setup, featur
 
 ## 2) One-Time Setup
 
-From `tool/`:
+Linux/macOS:
 
 ```bash
-uv sync
+cd /home/sg/dev/Hack2Future/tool
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e .
+```
+
+Windows PowerShell:
+
+```powershell
+cd C:\path\to\Hack2Future\tool
+py -3 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -e .
 ```
 
 ## 3) Daily Fast Workflow
 
-### Terminal A: backend API
+### Terminal A: backend API (Linux/macOS)
 
 ```bash
 cd /home/sg/dev/Hack2Future/tool
-uv run uvicorn api.app:app --app-dir src --host 0.0.0.0 --port 8000 --reload
+source .venv/bin/activate
+uvicorn api.app:app --app-dir src --host 0.0.0.0 --port 8000 --reload
 ```
 
-### Terminal B: run analysis commands
+### Terminal A: backend API (Windows PowerShell)
+
+```powershell
+cd C:\path\to\Hack2Future\tool
+.\.venv\Scripts\Activate.ps1
+uvicorn api.app:app --app-dir src --host 0.0.0.0 --port 8000 --reload
+```
+
+### Terminal B: run analysis commands (Linux/macOS)
 
 ```bash
 cd /home/sg/dev/Hack2Future/tool
+source .venv/bin/activate
+```
+
+### Terminal B: run analysis commands (Windows PowerShell)
+
+```powershell
+cd C:\path\to\Hack2Future\tool
+.\.venv\Scripts\Activate.ps1
 ```
 
 ## 4) Core CLI Commands
@@ -53,8 +84,8 @@ cd /home/sg/dev/Hack2Future/tool
 ### A) Live cluster (namespace scoped)
 
 ```bash
-uv run python src/main.py --ingestor kubectl --namespace vulnerable-ns --graph-out out/vulnerable-graph.json --pdf-out out/vulnerable-report.pdf
-uv run python src/main.py --ingestor kubectl --namespace secure-ns --graph-out out/secure-graph.json --pdf-out out/secure-report.pdf
+python src/main.py --ingestor kubectl --namespace vulnerable-ns --graph-out out/vulnerable-graph.json --pdf-out out/vulnerable-report.pdf
+python src/main.py --ingestor kubectl --namespace secure-ns --graph-out out/secure-graph.json --pdf-out out/secure-report.pdf
 ```
 
 ### B) Namespace RBAC modes
@@ -62,31 +93,31 @@ uv run python src/main.py --ingestor kubectl --namespace secure-ns --graph-out o
 Strict mode (exclude cluster role bindings):
 
 ```bash
-uv run python src/main.py --ingestor kubectl --namespace vulnerable-ns --include-cluster-rbac false --graph-out out/vulnerable-strict.json
+python src/main.py --ingestor kubectl --namespace vulnerable-ns --include-cluster-rbac false --graph-out out/vulnerable-strict.json
 ```
 
 Hybrid mode (default behavior):
 
 ```bash
-uv run python src/main.py --ingestor kubectl --namespace vulnerable-ns --include-cluster-rbac true --graph-out out/vulnerable-hybrid.json
+python src/main.py --ingestor kubectl --namespace vulnerable-ns --include-cluster-rbac true --graph-out out/vulnerable-hybrid.json
 ```
 
 ### C) Mock mode
 
 ```bash
-uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --graph-out out/mock-graph.json --pdf-out out/mock-report.pdf
+python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --graph-out out/mock-graph.json --pdf-out out/mock-report.pdf
 ```
 
 ### D) Replay from exported graph
 
 ```bash
-uv run python src/main.py --graph-in out/vulnerable-graph.json --pdf-out out/replay-report.pdf
+python src/main.py --graph-in out/vulnerable-graph.json --pdf-out out/replay-report.pdf
 ```
 
 ### E) Temporal diff with explicit snapshot directory
 
 ```bash
-uv run python src/main.py --ingestor kubectl --namespace vulnerable-ns --snapshot-dir out/custom-snapshots
+python src/main.py --ingestor kubectl --namespace vulnerable-ns --snapshot-dir out/custom-snapshots
 ```
 
 Notes:
@@ -108,7 +139,7 @@ export NVD_API_KEY="your_nvd_api_key"
 ### Run with live NVD scoring
 
 ```bash
-uv run python src/main.py --ingestor kubectl --namespace vulnerable-ns --enable-nvd-scoring true --nvd-timeout 10 --graph-out out/vulnerable-nvd.json
+python src/main.py --ingestor kubectl --namespace vulnerable-ns --enable-nvd-scoring true --nvd-timeout 10 --graph-out out/vulnerable-nvd.json
 ```
 
 ### Notes
@@ -151,16 +182,16 @@ kubectl apply -f src/k8s-yaml/secure-cluster.yaml
 ### Full suite
 
 ```bash
-uv run python -m unittest discover -s test -v
+python -m unittest discover -s test -v
 ```
 
 ### High-value focused runs
 
 ```bash
-uv run python -m unittest test/test_api/test_graph_analysis_api.py -v
-uv run python -m unittest test/test_kubectl_runner.py -v
-uv run python -m unittest test/test_nvd_scorer.py -v
-uv run python -m unittest test/test_main_export.py -v
+python -m unittest test/test_api/test_graph_analysis_api.py -v
+python -m unittest test/test_kubectl_runner.py -v
+python -m unittest test/test_nvd_scorer.py -v
+python -m unittest test/test_main_export.py -v
 ```
 
 ## 9) Most Useful Paths
