@@ -232,6 +232,7 @@ class CliFormatter:
 			lines.append(f"Path: {self._format_path(path_nodes)}")
 		else:
 			lines.append("✓ No Attack Path Detected")
+			lines.append("No path found between source and target.")
 			lines.append(f"Source: {self._node_label(source)}")
 			lines.append(f"Target: {self._node_label(target)}")
 

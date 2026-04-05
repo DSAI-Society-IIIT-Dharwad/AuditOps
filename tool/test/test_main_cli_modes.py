@@ -226,6 +226,63 @@ class TestMainCliModes(unittest.TestCase):
         self.assertIn("Error: source node not found: Pod:demo:not-real", stderr_stream.getvalue())
         self.assertNotIn("Traceback", stderr_stream.getvalue())
 
+    def test_cli_entrypoint_disconnected_source_target_reports_no_path_without_exception(self) -> None:
+        payload = {
+            "schema_version": "1.0.0",
+            "nodes": [
+                {
+                    "node_id": "Pod:demo:isolated-source",
+                    "entity_type": "Pod",
+                    "name": "isolated-source",
+                    "namespace": "demo",
+                    "risk_score": 1.0,
+                    "is_source": True,
+                    "is_sink": False,
+                },
+                {
+                    "node_id": "Secret:demo:isolated-target",
+                    "entity_type": "Secret",
+                    "name": "isolated-target",
+                    "namespace": "demo",
+                    "risk_score": 1.0,
+                    "is_source": False,
+                    "is_sink": True,
+                },
+            ],
+            "edges": [],
+        }
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            graph_in = root / "in.json"
+            graph_out = root / "out.json"
+            graph_in.write_text(json.dumps(payload), encoding="utf-8")
+
+            argv = [
+                "main.py",
+                "--graph-in",
+                str(graph_in),
+                "--graph-out",
+                str(graph_out),
+                "--source",
+                "Pod:demo:isolated-source",
+                "--target",
+                "Secret:demo:isolated-target",
+            ]
+            stdout_stream = io.StringIO()
+            stderr_stream = io.StringIO()
+
+            with patch.object(sys, "argv", argv), patch.object(
+                main_mod.sys,
+                "stdout",
+                new=stdout_stream,
+            ), patch.object(main_mod.sys, "stderr", new=stderr_stream):
+                code = main_mod._run_cli_entrypoint()
+
+        self.assertEqual(code, 0)
+        self.assertIn("No path found between source and target.", stdout_stream.getvalue())
+        self.assertEqual(stderr_stream.getvalue(), "")
+
     def _run_main_and_capture_report(self, extra_args: list[str]) -> dict[str, object]:
         with tempfile.TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)

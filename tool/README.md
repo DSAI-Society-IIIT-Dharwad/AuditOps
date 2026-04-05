@@ -238,6 +238,9 @@ uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-grap
 # Dijkstra shortest attack path (set source/target explicitly)
 uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --source User:default:dev-1 --target Database:data:production-db
 
+# Dijkstra shortest attack path (fixture-style aliases are also accepted)
+uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --source user-dev1 --target db-production
+
 # BFS blast radius only
 uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-graph.json --blast-radius --source Pod:default:web-frontend --max-hops 3
 
@@ -251,6 +254,7 @@ uv run python src/main.py --ingestor mock --mock-file ../tests/mock-cluster-grap
 Expected output snippets:
 
 - Attack-path mode: `⚠ Attack Path Detected` and `Hops: <n> | Risk: <score> (<severity>)`
+- Disconnected source/target in attack-path mode: `No path found between source and target.` (no exception)
 - Blast-radius mode: `Blast Radius: <count> node(s) within <hops> hop(s)`
 - Cycle mode: `Cycles: <count>`
 - Critical-node mode: `Critical Node: <node>` and path-disruption metrics
@@ -379,7 +383,7 @@ Use this section as a submission checklist that maps rubric items to concrete im
 | Ingest from live cluster or mock input | `src/ingestion/kubectl_runner.py`, `src/ingestion/mock_parser.py` | `uv run python -m unittest test/test_kubectl_runner.py test/test_mock_parser.py -v` |
 | Build and replay normalized graph artifact | `src/graph/networkx_builder.py`, `src/main.py` (`--graph-out`, `--graph-in`) | `uv run python -m unittest test/test_networkx_builder.py test/test_main_export.py -v` |
 | BFS blast-radius analysis | `src/analysis/blast_radius.py`, CLI mode `--blast-radius` | `uv run python -m unittest test/test_blast_radius.py -v` (includes rubric BFS-1, BFS-2, and isolated-source BFS-3 cases) |
-| Dijkstra shortest attack path | `src/analysis/shortest_path.py`, CLI mode `--attack-path` | `uv run python -m unittest test/test_shortest_path.py -v` |
+| Dijkstra shortest attack path | `src/analysis/shortest_path.py`, CLI mode `--attack-path` | `uv run python -m unittest test/test_shortest_path.py test/test_dijkstra_rubric_cases.py -v` (includes DIJK-1, DIJK-2, DIJK-3/no-path, and weighted-vs-hop-count checks) |
 | Attack path output accuracy (sequence, hops, risk sum, CVE labels, sort order) | `src/main.py` (`_enumerate_best_attack_paths`), `src/reporting/cli_formatter.py` | `uv run python -m unittest test/test_attack_path_accuracy.py -v` |
 | DFS cycle detection | `src/analysis/cycle_detect.py`, CLI mode `--cycles` | `uv run python -m unittest test/test_cycle_detect.py -v` |
 | Critical-node disruption analysis | `src/analysis/critical_node.py`, CLI mode `--critical-node` | `uv run python -m unittest test/test_critical_node.py -v` |

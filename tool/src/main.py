@@ -14,7 +14,7 @@ from analysis.blast_radius import calculate_blast_radius
 from analysis.critical_node import identify_critical_node
 from analysis.cycle_detect import detect_cycles
 from analysis.shortest_path import dijkstra_shortest_path
-from core.models import ClusterGraphData, Edge
+from core.models import ClusterGraphData, Edge, Node
 from graph.networkx_builder import NetworkXGraphStorage
 from ingestion.kubectl_runner import KubectlDataIngestor
 from ingestion.mock_parser import MockDataIngestor
@@ -316,9 +316,7 @@ def _select_report_view(full_report: dict[str, Any], modes: dict[str, bool]) -> 
 
 def _resolve_source_id(storage: NetworkXGraphStorage, explicit_source: str | None, *, namespace: str | None) -> str:
     if explicit_source:
-        if not storage.has_node(explicit_source):
-            raise KeyError(f"source node not found: {explicit_source}")
-        return explicit_source
+        return _resolve_explicit_node_id(storage, explicit_source, role_label="source")
 
     nodes = _nodes_in_scope(storage, namespace)
     flagged = [node.node_id for node in nodes if node.is_source]
@@ -336,9 +334,7 @@ def _resolve_source_id(storage: NetworkXGraphStorage, explicit_source: str | Non
 
 def _resolve_sink_ids(storage: NetworkXGraphStorage, explicit_target: str | None, *, namespace: str | None) -> list[str]:
     if explicit_target:
-        if not storage.has_node(explicit_target):
-            raise KeyError(f"target node not found: {explicit_target}")
-        return [explicit_target]
+        return [_resolve_explicit_node_id(storage, explicit_target, role_label="target")]
 
     nodes = _nodes_in_scope(storage, namespace)
     flagged = [node.node_id for node in nodes if node.is_sink]
@@ -388,10 +384,96 @@ def _nodes_in_scope(storage: NetworkXGraphStorage, namespace: str | None):
     ]
 
 
+ENTITY_TYPE_ALIASES: dict[str, set[str]] = {
+    "database": {"database", "db"},
+    "namespace": {"namespace", "ns"},
+    "serviceaccount": {"serviceaccount", "sa"},
+    "clusterrole": {"clusterrole", "cr"},
+    "externalactor": {"externalactor", "external"},
+    "configmap": {"configmap", "cm"},
+    "persistentvolume": {"persistentvolume", "pv", "pvc"},
+}
+
+
+def _resolve_explicit_node_id(storage: NetworkXGraphStorage, explicit_node: str, *, role_label: str) -> str:
+    if storage.has_node(explicit_node):
+        return explicit_node
+
+    query_words = _split_lookup_words(explicit_node, include_compact=False)
+    query_compact = _normalize_lookup_word(explicit_node)
+    if not query_words:
+        raise KeyError(f"{role_label} node not found: {explicit_node}")
+
+    candidates: list[str] = []
+    for node in storage.all_nodes():
+        candidate_words = _node_lookup_words(node)
+        if query_words.issubset(candidate_words) or (query_compact and query_compact in candidate_words):
+            candidates.append(node.node_id)
+
+    unique_candidates = sorted(set(candidates))
+    if len(unique_candidates) == 1:
+        return unique_candidates[0]
+
+    raise KeyError(f"{role_label} node not found: {explicit_node}")
+
+
+def _node_lookup_words(node: Node) -> set[str]:
+    words: set[str] = set()
+    for value in (node.node_id, node.entity_type, node.namespace, node.name):
+        words.update(_split_lookup_words(value))
+
+    entity_norm = _normalize_lookup_word(node.entity_type)
+    name_norm = _normalize_lookup_word(node.name)
+    if entity_norm and name_norm:
+        words.add(f"{entity_norm}{name_norm}")
+
+    aliases = ENTITY_TYPE_ALIASES.get(entity_norm, {entity_norm})
+    for alias in aliases:
+        if alias:
+            words.add(alias)
+            if name_norm:
+                words.add(f"{alias}{name_norm}")
+
+    return {word for word in words if word}
+
+
+def _split_lookup_words(value: str | None, *, include_compact: bool = True) -> set[str]:
+    raw = str(value or "").strip().lower()
+    if not raw:
+        return set()
+
+    words: set[str] = set()
+    token_chars: list[str] = []
+    for ch in raw:
+        if ch.isalnum():
+            token_chars.append(ch)
+        elif token_chars:
+            words.add("".join(token_chars))
+            token_chars = []
+    if token_chars:
+        words.add("".join(token_chars))
+
+    if include_compact:
+        compact = _normalize_lookup_word(raw)
+        if compact:
+            words.add(compact)
+
+    return words
+
+
+def _normalize_lookup_word(value: str | None) -> str:
+    return "".join(ch for ch in str(value or "").lower() if ch.isalnum())
+
+
 def _find_best_attack_path(storage: NetworkXGraphStorage, source_id: str, sink_ids: list[str]):
     best = None
     for sink_id in sink_ids:
-        path_result = dijkstra_shortest_path(storage, source_id, sink_id)
+        path_result = dijkstra_shortest_path(
+            storage,
+            source_id,
+            sink_id,
+            include_node_risk=False,
+        )
         if path_result is None:
             continue
         if best is None or path_result.total_cost < best.total_cost:
