@@ -72,6 +72,22 @@ class TestAttackPathAccuracy(unittest.TestCase):
         self.assertEqual(first_edge.get("cve"), "CVE-2024-1234")
         self.assertAlmostEqual(float(first_edge.get("cvss", 0.0)), 8.1, places=1)
 
+        remediations = [str(item) for item in row.get("remediations", [])]
+        self.assertGreaterEqual(len(remediations), 2)
+        self.assertTrue(any("Patch CVE-2024-1234" in item for item in remediations))
+        self.assertTrue(any("Remove RoleBinding 'secret-reader'" in item for item in remediations))
+
+    def test_each_path_has_actionable_remediation(self) -> None:
+        for row in self.attack_paths:
+            remediations = [str(item).strip() for item in row.get("remediations", []) if str(item).strip()]
+            self.assertGreaterEqual(len(remediations), 1)
+            self.assertTrue(
+                any(
+                    token in " ".join(remediations).lower()
+                    for token in ("remove", "revoke", "patch", "rotate", "restrict", "harden")
+                )
+            )
+
     def test_formatter_shows_cve_annotations_for_cve_edges(self) -> None:
         cve_edge_count = sum(
             1

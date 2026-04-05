@@ -486,6 +486,7 @@ def _build_path_record(
         )
 
     total_cost_value = round(total_cost_override if total_cost_override is not None else total_cost, 1)
+    remediations = _build_path_remediations(path_nodes, edges)
 
     return {
         "source": path_nodes[0],
@@ -495,7 +496,90 @@ def _build_path_record(
         "risk_score": total_cost_value,
         "severity": _risk_level_for_score(total_cost_value),
         "edges": edges,
+        "remediations": remediations,
     }
+
+
+def _build_path_remediations(path_nodes: list[str], edges: list[dict[str, Any]]) -> list[str]:
+    suggestions: list[str] = []
+    seen: set[str] = set()
+
+    def _add(text: str) -> None:
+        message = text.strip()
+        if not message or message in seen:
+            return
+        seen.add(message)
+        suggestions.append(message)
+
+    for edge in edges:
+        source_id = str(edge.get("source") or "")
+        target_id = str(edge.get("target") or "")
+        relationship = str(edge.get("relationship") or "related_to")
+        relationship_norm = relationship.replace("_", "-").lower()
+
+        source_type, _, source_name = _split_node_id(source_id)
+        target_type, _, target_name = _split_node_id(target_id)
+        source_label = source_name or source_id
+        target_label = target_name or target_id
+
+        cve = str(edge.get("cve") or "").strip()
+        cvss = edge.get("cvss")
+        if cve:
+            if cvss is not None:
+                _add(f"Patch {cve} (CVSS {float(cvss):.1f}) on '{target_label}'.")
+            else:
+                _add(f"Patch {cve} on '{target_label}'.")
+
+        if relationship_norm == "bound-to":
+            if source_type == "ServiceAccount" and target_type in {"Role", "ClusterRole"}:
+                binding_kind = "RoleBinding" if target_type == "Role" else "ClusterRoleBinding"
+                _add(f"Remove {binding_kind} '{target_label}' from service account '{source_label}'.")
+            else:
+                _add(f"Remove binding from '{source_label}' to '{target_label}'.")
+            continue
+
+        if relationship_norm == "can-read" and target_type == "Secret":
+            _add(f"Revoke secret-read permission on '{target_label}' from '{source_label}'.")
+            continue
+
+        if relationship_norm in {"can-exec", "can-exec-on"}:
+            _add(f"Revoke '{relationship}' permission from '{source_label}' to '{target_label}'.")
+            continue
+
+        if relationship_norm == "falls-back-to" and target_type == "ServiceAccount":
+            _add(f"Assign a dedicated service account to '{source_label}' instead of '{target_label}'.")
+            continue
+
+        if relationship_norm == "grants-access-to" and source_type == "Secret":
+            _add(f"Rotate secret '{source_label}' and restrict downstream access to '{target_label}'.")
+            continue
+
+    if not suggestions and edges:
+        highest_weight_edge = max(edges, key=lambda edge: float(edge.get("weight", 0.0)))
+        source_id = str(highest_weight_edge.get("source") or "")
+        target_id = str(highest_weight_edge.get("target") or "")
+        relationship = str(highest_weight_edge.get("relationship") or "related_to")
+        _, _, source_name = _split_node_id(source_id)
+        _, _, target_name = _split_node_id(target_id)
+        source_label = source_name or source_id
+        target_label = target_name or target_id
+        _add(f"Harden '{relationship}' from '{source_label}' to '{target_label}' to break this path.")
+
+    if path_nodes:
+        _, _, source_name = _split_node_id(str(path_nodes[0]))
+        _, _, target_name = _split_node_id(str(path_nodes[-1]))
+        source_label = source_name or str(path_nodes[0])
+        target_label = target_name or str(path_nodes[-1])
+        _add(f"Restrict reachability from '{source_label}' to '{target_label}' with tighter RBAC and network policy.")
+
+    return suggestions[:3]
+
+
+def _split_node_id(node_id: str) -> tuple[str, str, str]:
+    parts = str(node_id).split(":", 2)
+    if len(parts) == 3:
+        return parts[0], parts[1], parts[2]
+    return "", "", str(node_id)
 
 
 def _load_mock_metadata_if_available(ingestor: str, mock_file: str) -> dict[str, Any]:

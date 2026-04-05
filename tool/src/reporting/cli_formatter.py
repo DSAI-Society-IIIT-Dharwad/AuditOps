@@ -127,6 +127,16 @@ class CliFormatter:
 						segment += f"  [{cve}]"
 				lines.append(segment)
 
+			remediations = [
+				str(item).strip()
+				for item in self._as_sequence(path.get("remediations"))
+				if str(item).strip()
+			]
+			if remediations:
+				lines.append("  Remediation:")
+				for action in remediations:
+					lines.append(f"    - {action}")
+
 		lines.append("")
 		lines.append("")
 		lines.append("[ SECTION 2 — BLAST RADIUS ANALYSIS (BFS, depth=3) ]")
@@ -152,6 +162,7 @@ class CliFormatter:
 			for idx, cycle in enumerate(cycle_list, start=1):
 				cycle_labels = [self._structured_node_name(node_id) for node_id in cycle]
 				lines.append(f"  Cycle #{idx}: {' ↔ '.join(cycle_labels)}")
+				lines.append(f"    Remediation: {self._cycle_remediation_text(cycle)}")
 		else:
 			lines.append("  ✓  0 cycle(s) detected")
 
@@ -409,6 +420,20 @@ class CliFormatter:
 			else:
 				normalized.append([str(cycle)])
 		return normalized
+
+	def _cycle_remediation_text(self, cycle: Sequence[Any]) -> str:
+		nodes = [str(node) for node in cycle if str(node)]
+		if len(nodes) >= 2:
+			if len(nodes) >= 3 and nodes[0] == nodes[-1]:
+				source_node = nodes[-2]
+				target_node = nodes[-1]
+			else:
+				source_node = nodes[0]
+				target_node = nodes[1]
+			source_name = self._structured_node_name(source_node)
+			target_name = self._structured_node_name(target_node)
+			return f"Break cycle: revoke permission from {source_name} to {target_name}."
+		return "Break cycle by revoking one permission edge in this loop."
 
 	def _section_header(self, title: str) -> list[str]:
 		line = "=" * len(title)

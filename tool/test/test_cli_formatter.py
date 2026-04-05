@@ -65,6 +65,8 @@ class TestCliFormatter(unittest.TestCase):
 			"metadata": {"generated_at": "2026-04-04 12:00:00", "nodes": 4, "edges": 3},
 			"attack_paths": [
 				{
+					"source": "User:default:dev-1",
+					"target": "Secret:default:db",
 					"hops": 2,
 					"risk_score": 11.5,
 					"path": ["User:default:dev-1", "Pod:default:web", "Secret:default:db"],
@@ -81,6 +83,10 @@ class TestCliFormatter(unittest.TestCase):
 							"target": "Secret:default:db",
 							"relationship": "can-read",
 						},
+					],
+					"remediations": [
+						"Patch CVE-2026-1000 on 'web'.",
+						"Revoke secret-read permission on 'db' from 'web'.",
 					],
 				}
 			],
@@ -125,9 +131,12 @@ class TestCliFormatter(unittest.TestCase):
 		text = CliFormatter().format_report(report)
 		self.assertIn("[ SECTION 1 — ATTACK PATH DETECTION (Dijkstra) ]", text)
 		self.assertIn("Path #1", text)
+		self.assertIn("Remediation:", text)
+		self.assertIn("Patch CVE-2026-1000 on 'web'.", text)
 		self.assertIn("[ SECTION 2 — BLAST RADIUS ANALYSIS (BFS, depth=3) ]", text)
 		self.assertIn("[ SECTION 4 — CRITICAL NODE ANALYSIS ]", text)
 		self.assertIn("[ SECTION 5 — TEMPORAL DIFF ALERTS ]", text)
+		self.assertIn("Break cycle: revoke permission", text)
 		self.assertIn("New attack path(s) detected since previous scan", text)
 		self.assertIn("SUMMARY", text)
 

@@ -260,7 +260,9 @@ Structured full-report readability contract:
 - Section 1 through Summary are explicitly labeled and ordered.
 - Each path block includes: Source, Target, Hops, Risk Score, and Severity label.
 - Severity thresholds: `LOW < 9`, `MEDIUM >= 9`, `HIGH >= 11`, `CRITICAL >= 20`.
-- Section 4 includes actionable remediation language (recommended node/binding to remove).
+- Each path block includes path-specific remediation actions (for example CVE patching, binding removal, or permission revocation).
+- Cycle findings include explicit break-cycle remediation guidance.
+- Section 4 includes actionable remediation language with estimated impact (recommended node/binding and paths eliminated).
 
 CLI behavior contract:
 
