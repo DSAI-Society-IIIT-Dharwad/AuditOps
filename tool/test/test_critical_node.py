@@ -14,11 +14,14 @@ if str(SRC) not in sys.path:
 models = importlib.import_module("core.models")
 builder = importlib.import_module("graph.networkx_builder")
 critical_mod = importlib.import_module("analysis.critical_node")
+mock_parser_mod = importlib.import_module("ingestion.mock_parser")
+main_mod = importlib.import_module("main")
 
 Node = models.Node
 Edge = models.Edge
 NetworkXGraphStorage = builder.NetworkXGraphStorage
 identify_critical_node = critical_mod.identify_critical_node
+MockDataIngestor = mock_parser_mod.MockDataIngestor
 
 
 class TestCriticalNode(unittest.TestCase):
@@ -55,6 +58,59 @@ class TestCriticalNode(unittest.TestCase):
 
 		result = identify_critical_node(storage)
 		self.assertIsNone(result)
+
+
+class TestCriticalNodeRubricCases(unittest.TestCase):
+	@classmethod
+	def setUpClass(cls) -> None:
+		fixture_path = ROOT.parent / "tests" / "mock-cluster-graph.json"
+		graph_data = MockDataIngestor(file_path=fixture_path).ingest()
+		cls.storage = NetworkXGraphStorage.from_cluster_graph_data(graph_data)
+		cls.source_ids = main_mod._resolve_source_ids(cls.storage, None, namespace=None)
+		cls.sink_ids = main_mod._resolve_sink_ids(cls.storage, None, namespace=None)
+
+	def test_identify_critical_node_matches_mock_expected_node_and_counts(self) -> None:
+		result = identify_critical_node(
+			self.storage,
+			source_ids=self.source_ids,
+			sink_ids=self.sink_ids,
+			max_depth=8,
+		)
+
+		self.assertIsNotNone(result)
+		assert result is not None
+		self.assertEqual(result.node_id, "Pod:default:web-frontend")
+		self.assertEqual(result.total_paths_before, 46)
+		self.assertEqual(result.paths_removed, 32)
+		self.assertEqual(result.total_paths_after, 14)
+
+		source_sink_ids = set(self.source_ids) | set(self.sink_ids)
+		self.assertNotIn(result.node_id, source_sink_ids)
+
+	def test_top_five_ranking_matches_mock_expected_order(self) -> None:
+		all_paths = main_mod._enumerate_attack_paths(
+			self.storage,
+			source_ids=self.source_ids,
+			sink_ids=self.sink_ids,
+			max_depth=8,
+		)
+		ranked = main_mod._rank_critical_nodes_from_paths(
+			all_paths,
+			source_ids=self.source_ids,
+			sink_ids=self.sink_ids,
+			top_n=5,
+		)
+
+		expected = [
+			("Pod:default:web-frontend", 32),
+			("Pod:default:api-server", 24),
+			("Service:default:internal-api-svc", 16),
+			("ServiceAccount:default:sa-worker", 14),
+			("Role:default:pod-exec", 14),
+		]
+
+		actual = [(str(row["node_id"]), int(row["paths_removed"])) for row in ranked]
+		self.assertEqual(actual, expected)
 
 
 if __name__ == "__main__":

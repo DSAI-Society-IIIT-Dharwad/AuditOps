@@ -102,6 +102,7 @@ Notes for `tests/mock-cluster-graph.json`:
 - `metadata.pre_planted_paths = 6` means six canonical attack chains were intentionally planted in the fixture.
 - The full report enumerates all shortest source-to-sink attack paths under current graph weights, so the same fixture currently reports 18 attack paths.
 - Four planted chains appear exactly, and two are represented by lower-cost variants due to shortcut edges in the same fixture.
+- Critical-node ranking uses non-source/non-sink candidates only; for the mock dataset the expected top entries are `web-frontend` (-32 of 46) then `api-server` (-24).
 
 Report structure guarantees (readability rubric):
 

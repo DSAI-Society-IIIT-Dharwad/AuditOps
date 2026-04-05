@@ -81,44 +81,20 @@ def _count_source_to_sink_paths(
 	sink_ids: list[str],
 	max_depth: int,
 ) -> int:
-	sinks = {node_id for node_id in sink_ids if graph.has_node(node_id)}
 	sources = [node_id for node_id in source_ids if graph.has_node(node_id)]
+	sinks = [node_id for node_id in sink_ids if graph.has_node(node_id)]
 	if not sources or not sinks:
 		return 0
 
-	if nx.is_directed_acyclic_graph(graph):
-		memo: dict[str, int] = {}
-
-		def count_from(node_id: str) -> int:
-			if node_id in memo:
-				return memo[node_id]
-			if node_id in sinks:
-				memo[node_id] = 1
-				return 1
-			total = 0
-			for succ in graph.successors(node_id):
-				total += count_from(succ)
-			memo[node_id] = total
-			return total
-
-		return sum(count_from(source_id) for source_id in sources)
-
-	# Fallback for cyclic graphs: bounded DFS over simple paths.
-	def dfs_count(current: str, visited: set[str], depth_left: int) -> int:
-		if current in sinks:
-			return 1
-		if depth_left == 0:
-			return 0
-
-		total = 0
-		for succ in graph.successors(current):
-			if succ in visited:
-				continue
-			total += dfs_count(succ, visited | {succ}, depth_left - 1)
-		return total
-
 	total_paths = 0
 	for source_id in sources:
-		total_paths += dfs_count(source_id, {source_id}, max_depth)
+		for sink_id in sinks:
+			if source_id == sink_id:
+				continue
+			try:
+				for _ in nx.all_simple_paths(graph, source=source_id, target=sink_id, cutoff=max_depth):
+					total_paths += 1
+			except (nx.NetworkXNoPath, nx.NodeNotFound):
+				continue
 	return total_paths
 
