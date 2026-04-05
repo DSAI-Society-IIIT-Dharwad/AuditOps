@@ -3,16 +3,73 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { fetchGraphAnalysis, GraphApiError } from "../lib/apiClient";
 
 const AnalysisContext = createContext(null);
+const ANALYSIS_PREFERENCES_KEY = "h2f.analysis.preferences.v1";
+
+function loadStoredPreferences() {
+  if (typeof window === "undefined") {
+    return {};
+  }
+
+  try {
+    const raw = window.localStorage.getItem(ANALYSIS_PREFERENCES_KEY);
+    if (!raw) {
+      return {};
+    }
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (_error) {
+    return {};
+  }
+}
+
+function saveStoredPreferences(preferences) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(ANALYSIS_PREFERENCES_KEY, JSON.stringify(preferences));
+  } catch (_error) {
+    // Ignore quota/security errors and continue with in-memory state.
+  }
+}
+
+function toStoredString(value, fallback) {
+  const text = String(value ?? "").trim();
+  return text || fallback;
+}
+
+function toStoredBoolean(value, fallback) {
+  return typeof value === "boolean" ? value : fallback;
+}
+
+function toStoredInteger(value, fallback, { min, max }) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  const integerValue = Math.trunc(parsed);
+  if (integerValue < min || integerValue > max) {
+    return fallback;
+  }
+  return integerValue;
+}
 
 export function AnalysisProvider({ children }) {
-  const [namespace, setNamespace] = useState("vulnerable-ns");
-  const [includeClusterRbac, setIncludeClusterRbac] = useState(true);
-  const [enableNvdScoring, setEnableNvdScoring] = useState(false);
-  const [maxHops, setMaxHops] = useState(3);
-  const [maxDepth, setMaxDepth] = useState(8);
-  const [showAttackPath, setShowAttackPath] = useState(true);
-  const [showBlastRadius, setShowBlastRadius] = useState(true);
-  const [showCriticalNode, setShowCriticalNode] = useState(true);
+  const initialPreferencesRef = useRef(null);
+  if (initialPreferencesRef.current === null) {
+    initialPreferencesRef.current = loadStoredPreferences();
+  }
+  const initialPreferences = initialPreferencesRef.current;
+
+  const [namespace, setNamespace] = useState(() => toStoredString(initialPreferences.namespace, "vulnerable-ns"));
+  const [includeClusterRbac, setIncludeClusterRbac] = useState(() => toStoredBoolean(initialPreferences.includeClusterRbac, true));
+  const [enableNvdScoring, setEnableNvdScoring] = useState(() => toStoredBoolean(initialPreferences.enableNvdScoring, false));
+  const [maxHops, setMaxHops] = useState(() => toStoredInteger(initialPreferences.maxHops, 3, { min: 0, max: 10 }));
+  const [maxDepth, setMaxDepth] = useState(() => toStoredInteger(initialPreferences.maxDepth, 8, { min: 1, max: 20 }));
+  const [showAttackPath, setShowAttackPath] = useState(() => toStoredBoolean(initialPreferences.showAttackPath, true));
+  const [showBlastRadius, setShowBlastRadius] = useState(() => toStoredBoolean(initialPreferences.showBlastRadius, true));
+  const [showCriticalNode, setShowCriticalNode] = useState(() => toStoredBoolean(initialPreferences.showCriticalNode, true));
   const [payload, setPayload] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -42,6 +99,28 @@ export function AnalysisProvider({ children }) {
   useEffect(() => {
     maxDepthRef.current = maxDepth;
   }, [maxDepth]);
+
+  useEffect(() => {
+    saveStoredPreferences({
+      namespace,
+      includeClusterRbac,
+      enableNvdScoring,
+      maxHops,
+      maxDepth,
+      showAttackPath,
+      showBlastRadius,
+      showCriticalNode,
+    });
+  }, [
+    namespace,
+    includeClusterRbac,
+    enableNvdScoring,
+    maxHops,
+    maxDepth,
+    showAttackPath,
+    showBlastRadius,
+    showCriticalNode,
+  ]);
 
   const refreshAnalysis = useCallback(async (overrides = {}) => {
     const nextNamespace = String(overrides.namespace ?? namespaceRef.current).trim();

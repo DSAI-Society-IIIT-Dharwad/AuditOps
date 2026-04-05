@@ -291,6 +291,25 @@ button:disabled {
   font-weight: 700;
 }
 
+.secondary-action {
+  border-color: rgba(54, 81, 106, 0.8);
+  background: rgba(15, 31, 47, 0.92);
+  color: #d9edff;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 10px;
+  font-family: "Sora", sans-serif;
+  font-weight: 700;
+}
+
+.secondary-action:hover:not(:disabled) {
+  border-color: rgba(121, 219, 255, 0.62);
+}
+
+.risk-load-button {
+  margin-left: auto;
+}
+
 .ingest-actions {
   margin-top: 10px;
   margin-bottom: 8px;
@@ -1063,6 +1082,10 @@ select {
   }
 
   .primary-action {
+    margin-left: 0;
+  }
+
+  .risk-load-button {
     margin-left: 0;
   }
 

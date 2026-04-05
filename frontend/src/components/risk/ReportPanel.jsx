@@ -1,3 +1,5 @@
+import { useMemo, useState } from "react";
+
 import { nodeDisplayLabel, nodeDisplayName, parseNodeId, severityForScore, toPercent } from "../../lib/reportUtils";
 
 function formatRisk(value) {
@@ -5,6 +7,8 @@ function formatRisk(value) {
 }
 
 export default function ReportPanel({ payload, selectedNodeId }) {
+  const [attackPathSort, setAttackPathSort] = useState("default");
+
   const report = payload?.report || {};
   const temporal = payload?.temporal || report?.temporal || {};
   const temporalConnectivity = temporal?.connectivity || {};
@@ -38,6 +42,34 @@ export default function ReportPanel({ payload, selectedNodeId }) {
   const activeNodeCvss = Number(activeNode?.nvd_max_cvss);
   const hasActiveNodeCvss = Number.isFinite(activeNodeCvss) && activeNodeCvss > 0;
   const hasNvdMetadata = Boolean(activeNode?.nvd_enriched);
+  const sortedAttackPaths = useMemo(() => {
+    if (!Array.isArray(attackPaths) || attackPaths.length <= 1 || attackPathSort === "default") {
+      return attackPaths;
+    }
+
+    const rows = [...attackPaths];
+    rows.sort((left, right) => {
+      const leftRisk = Number(left?.risk_score || 0);
+      const rightRisk = Number(right?.risk_score || 0);
+      const leftHops = Number(left?.hops || 0);
+      const rightHops = Number(right?.hops || 0);
+
+      if (attackPathSort === "risk-desc") {
+        return rightRisk - leftRisk || rightHops - leftHops;
+      }
+      if (attackPathSort === "risk-asc") {
+        return leftRisk - rightRisk || leftHops - rightHops;
+      }
+      if (attackPathSort === "hops-desc") {
+        return rightHops - leftHops || rightRisk - leftRisk;
+      }
+      if (attackPathSort === "hops-asc") {
+        return leftHops - rightHops || leftRisk - rightRisk;
+      }
+      return 0;
+    });
+    return rows;
+  }, [attackPathSort, attackPaths]);
 
   return (
     <aside className="report-panel">
@@ -97,10 +129,37 @@ export default function ReportPanel({ payload, selectedNodeId }) {
 
       <section className="section-block">
         <h3>Section 1 - Attack Path Detection</h3>
-        <div className="section-meta">{attackPaths.length} attack path(s) detected</div>
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            marginTop: 6,
+          }}
+        >
+          <div className="section-meta" style={{ marginTop: 0 }}>
+            {sortedAttackPaths.length} attack path(s) detected
+          </div>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--muted)", fontSize: 11 }}>
+            <span>Sort</span>
+            <select
+              value={attackPathSort}
+              onChange={(event) => setAttackPathSort(event.target.value)}
+              style={{ minWidth: 180 }}
+            >
+              <option value="default">Default order</option>
+              <option value="risk-desc">Risk: high to low</option>
+              <option value="risk-asc">Risk: low to high</option>
+              <option value="hops-desc">Hops: high to low</option>
+              <option value="hops-asc">Hops: low to high</option>
+            </select>
+          </label>
+        </div>
         <div className="path-list">
-          {attackPaths.length === 0 && <div className="empty-state">No source-to-sink path detected.</div>}
-          {attackPaths.map((path, index) => {
+          {sortedAttackPaths.length === 0 && <div className="empty-state">No source-to-sink path detected.</div>}
+          {sortedAttackPaths.map((path, index) => {
             const severity = path.severity || severityForScore(path.risk_score);
             return (
               <article className="path-card" key={`${path.source}-${path.target}-${index}`}>

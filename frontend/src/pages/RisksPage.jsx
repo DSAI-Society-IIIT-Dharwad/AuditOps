@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { useAnalysis } from "../app/AnalysisProvider";
 import { nodeDisplayName } from "../lib/reportUtils";
@@ -17,10 +17,84 @@ export default function RisksPage() {
     refreshAnalysis,
   } = useAnalysis();
 
+  const [pathQuery, setPathQuery] = useState("");
+  const [severityFilter, setSeverityFilter] = useState("ALL");
+  const [criticalNodeQuery, setCriticalNodeQuery] = useState("");
+
   const report = useMemo(() => payload?.report || {}, [payload]);
   const temporal = useMemo(() => payload?.temporal || report?.temporal || {}, [payload, report]);
-  const criticalNodes = report.critical_nodes || [];
-  const topPaths = (report.attack_paths || []).slice(-5).reverse();
+  const criticalNodes = Array.isArray(report.critical_nodes) ? report.critical_nodes : [];
+  const attackPaths = Array.isArray(report.attack_paths) ? report.attack_paths : [];
+
+  const topPaths = useMemo(() => {
+    const normalizedQuery = pathQuery.trim().toLowerCase();
+
+    return [...attackPaths]
+      .sort((a, b) => Number(b.risk_score || 0) - Number(a.risk_score || 0))
+      .filter((path) => {
+        const severity = String(path.severity || "LOW").toUpperCase();
+        if (severityFilter !== "ALL" && severity !== severityFilter) {
+          return false;
+        }
+        if (!normalizedQuery) {
+          return true;
+        }
+
+        const queryText = [
+          nodeDisplayName(path.source),
+          nodeDisplayName(path.target),
+          String(path.source || ""),
+          String(path.target || ""),
+        ]
+          .join(" ")
+          .toLowerCase();
+        return queryText.includes(normalizedQuery);
+      })
+      .slice(0, 10);
+  }, [attackPaths, pathQuery, severityFilter]);
+
+  const filteredCriticalNodes = useMemo(() => {
+    const normalizedQuery = criticalNodeQuery.trim().toLowerCase();
+
+    return [...criticalNodes]
+      .sort((a, b) => Number(b.paths_removed || 0) - Number(a.paths_removed || 0))
+      .filter((row) => {
+        if (!normalizedQuery) {
+          return true;
+        }
+        return nodeDisplayName(row.node_id).toLowerCase().includes(normalizedQuery);
+      });
+  }, [criticalNodeQuery, criticalNodes]);
+
+  const onExportRiskCsv = () => {
+    if (topPaths.length === 0) {
+      return;
+    }
+
+    const rows = [
+      ["source", "target", "hops", "risk_score", "severity"],
+      ...topPaths.map((path) => [
+        nodeDisplayName(path.source),
+        nodeDisplayName(path.target),
+        Number(path.hops || 0),
+        Number(path.risk_score || 0).toFixed(1),
+        String(path.severity || "LOW").toUpperCase(),
+      ]),
+    ];
+
+    const csv = rows
+      .map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(","))
+      .join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const safeNamespace = (namespace || "all").trim().replace(/[^a-zA-Z0-9-_]/g, "_") || "all";
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `risk-paths-${safeNamespace}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <section>
@@ -54,9 +128,48 @@ export default function RisksPage() {
         <button
           onClick={() => refreshAnalysis({ namespace, includeClusterRbac, enableNvdScoring })}
           disabled={loading || !namespace.trim()}
-          style={{ marginLeft: "auto" }}
+          className="risk-load-button"
         >
           {loading ? "Loading..." : "Load Risks"}
+        </button>
+
+        <div className="control-group compact">
+          <label htmlFor="risk-severity-filter">Severity</label>
+          <select
+            id="risk-severity-filter"
+            value={severityFilter}
+            onChange={(event) => setSeverityFilter(event.target.value)}
+          >
+            <option value="ALL">All</option>
+            <option value="CRITICAL">Critical</option>
+            <option value="HIGH">High</option>
+            <option value="MEDIUM">Medium</option>
+            <option value="LOW">Low</option>
+          </select>
+        </div>
+
+        <div className="control-group">
+          <label htmlFor="risk-path-query">Path search</label>
+          <input
+            id="risk-path-query"
+            value={pathQuery}
+            onChange={(event) => setPathQuery(event.target.value)}
+            placeholder="source or target"
+          />
+        </div>
+
+        <div className="control-group">
+          <label htmlFor="risk-critical-query">Critical node search</label>
+          <input
+            id="risk-critical-query"
+            value={criticalNodeQuery}
+            onChange={(event) => setCriticalNodeQuery(event.target.value)}
+            placeholder="node name"
+          />
+        </div>
+
+        <button type="button" onClick={onExportRiskCsv} disabled={topPaths.length === 0}>
+          Export Paths CSV
         </button>
       </div>
 
@@ -73,6 +186,9 @@ export default function RisksPage() {
           <div className="card">
             <div style={{ fontSize: 12, color: "var(--muted)", textTransform: "uppercase", marginBottom: 8 }}>
               Highest Risk Attack Paths
+            </div>
+            <div style={{ color: "var(--muted)", fontSize: 11, marginBottom: 8 }}>
+              Showing {topPaths.length} path(s)
             </div>
             {topPaths.length === 0 && <div style={{ color: "var(--muted)" }}>No source-to-sink path detected.</div>}
             {topPaths.map((path, index) => (
@@ -91,8 +207,11 @@ export default function RisksPage() {
             <div style={{ fontSize: 12, color: "var(--muted)", textTransform: "uppercase", marginBottom: 8 }}>
               Critical Node Ranking
             </div>
-            {criticalNodes.length === 0 && <div style={{ color: "var(--muted)" }}>No ranking available.</div>}
-            {criticalNodes.map((row) => (
+            <div style={{ color: "var(--muted)", fontSize: 11, marginBottom: 8 }}>
+              Showing {filteredCriticalNodes.length} node(s)
+            </div>
+            {filteredCriticalNodes.length === 0 && <div style={{ color: "var(--muted)" }}>No ranking available.</div>}
+            {filteredCriticalNodes.map((row) => (
               <div key={row.node_id} style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
                 <span>{nodeDisplayName(row.node_id)}</span>
                 <span style={{ color: "var(--danger)" }}>-{row.paths_removed || 0}</span>
