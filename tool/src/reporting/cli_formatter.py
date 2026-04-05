@@ -63,9 +63,9 @@ class CliFormatter:
 		metadata = self._as_mapping(report.get("metadata"))
 		source_generated = str(metadata.get("source_generated") or "").strip()
 		if source_generated:
-			timestamp = f"{source_generated} 02:25:35"
+			timestamp = source_generated
 		else:
-			timestamp = str(metadata.get("generated_at") or "n/a")
+			timestamp = str(metadata.get("generated_at") or "n/a").strip() or "n/a"
 		cluster = str(metadata.get("cluster") or "").strip()
 		nodes = self._as_int(metadata.get("nodes"), default=0)
 		edges = self._as_int(metadata.get("edges"), default=0)

@@ -1,0 +1,289 @@
+══════════════════════════════════════════════════════════════════
+  KILL CHAIN REPORT  —  2026-04-03 02:25:35
+  Cluster : mock-prod-cluster
+  Nodes   : 41  |  Edges: 48
+══════════════════════════════════════════════════════════════════
+
+[ SECTION 1 — ATTACK PATH DETECTION (Dijkstra) ]
+  ⚠  18 attack path(s) detected
+
+  Path #1  |  3 hops  |  Risk Score: 9.5  [MEDIUM]
+  Source: loadbalancer-svc (Service)  |  Target: analytics-db (Database)
+  ────────────────────────────────────────────────────────────
+  loadbalancer-svc (Service)  --[routes-to]-->  api-server (Pod)
+  api-server (Pod)  --[reads]-->  db-url-config (ConfigMap)
+  db-url-config (ConfigMap)  --[exposes-endpoint]-->  analytics-db (Database)
+  Remediation:
+    - Harden 'exposes-endpoint' from 'db-url-config' to 'analytics-db' to break this path.
+    - Restrict reachability from 'loadbalancer-svc' to 'analytics-db' with tighter RBAC and network policy.
+
+  Path #2  |  4 hops  |  Risk Score: 11.5  [HIGH]
+  Source: internet (ExternalActor)  |  Target: analytics-db (Database)
+  ────────────────────────────────────────────────────────────
+  internet (ExternalActor)  --[reaches]-->  loadbalancer-svc (Service)
+  loadbalancer-svc (Service)  --[routes-to]-->  api-server (Pod)
+  api-server (Pod)  --[reads]-->  db-url-config (ConfigMap)
+  db-url-config (ConfigMap)  --[exposes-endpoint]-->  analytics-db (Database)
+  Remediation:
+    - Harden 'exposes-endpoint' from 'db-url-config' to 'analytics-db' to break this path.
+    - Restrict reachability from 'internet' to 'analytics-db' with tighter RBAC and network policy.
+
+  Path #3  |  3 hops  |  Risk Score: 14.0  [HIGH]
+  Source: cicd-bot (User)  |  Target: production-db (Database)
+  ────────────────────────────────────────────────────────────
+  cicd-bot (User)  --[impersonates]-->  sa-cicd (ServiceAccount)
+  sa-cicd (ServiceAccount)  --[can-read]-->  cicd-deploy-token (Secret)
+  cicd-deploy-token (Secret)  --[grants-access-to]-->  production-db (Database)
+  Remediation:
+    - Revoke secret-read permission on 'cicd-deploy-token' from 'sa-cicd'.
+    - Rotate secret 'cicd-deploy-token' and restrict downstream access to 'production-db'.
+    - Restrict reachability from 'cicd-bot' to 'production-db' with tighter RBAC and network policy.
+
+  Path #4  |  4 hops  |  Risk Score: 15.0  [HIGH]
+  Source: dev-2 (User)  |  Target: worker-node-1 (Node)
+  ────────────────────────────────────────────────────────────
+  dev-2 (User)  --[can-exec]-->  log-aggregator (Pod)  [CVE-2024-9999, CVSS 6.5]
+  log-aggregator (Pod)  --[uses]-->  sa-logger (ServiceAccount)
+  sa-logger (ServiceAccount)  --[bound-to]-->  node-reader (Role)
+  node-reader (Role)  --[can-read]-->  worker-node-1 (Node)
+  Remediation:
+    - Patch CVE-2024-9999 (CVSS 6.5) on 'log-aggregator'.
+    - Revoke 'can-exec' permission from 'dev-2' to 'log-aggregator'.
+    - Remove RoleBinding 'node-reader' from service account 'sa-logger'.
+
+  Path #5  |  5 hops  |  Risk Score: 15.5  [HIGH]
+  Source: dev-1 (User)  |  Target: analytics-db (Database)
+  ────────────────────────────────────────────────────────────
+  dev-1 (User)  --[can-exec]-->  web-frontend (Pod)  [CVE-2024-1234, CVSS 8.1]
+  web-frontend (Pod)  --[calls]-->  internal-api-svc (Service)
+  internal-api-svc (Service)  --[routes-to]-->  api-server (Pod)
+  api-server (Pod)  --[reads]-->  db-url-config (ConfigMap)
+  db-url-config (ConfigMap)  --[exposes-endpoint]-->  analytics-db (Database)
+  Remediation:
+    - Patch CVE-2024-1234 (CVSS 8.1) on 'web-frontend'.
+    - Revoke 'can-exec' permission from 'dev-1' to 'web-frontend'.
+    - Restrict reachability from 'dev-1' to 'analytics-db' with tighter RBAC and network policy.
+
+  Path #6  |  4 hops  |  Risk Score: 17.0  [HIGH]
+  Source: dev-1 (User)  |  Target: worker-node-1 (Node)
+  ────────────────────────────────────────────────────────────
+  dev-1 (User)  --[can-exec]-->  background-worker (Pod)
+  background-worker (Pod)  --[uses]-->  sa-worker (ServiceAccount)
+  sa-worker (ServiceAccount)  --[bound-to]-->  pod-exec (Role)
+  pod-exec (Role)  --[can-exec-on]-->  worker-node-1 (Node)  [CVE-2024-3116, CVSS 9.0]
+  Remediation:
+    - Revoke 'can-exec' permission from 'dev-1' to 'background-worker'.
+    - Remove RoleBinding 'pod-exec' from service account 'sa-worker'.
+    - Patch CVE-2024-3116 (CVSS 9.0) on 'worker-node-1'.
+
+  Path #7  |  4 hops  |  Risk Score: 18.5  [HIGH]
+  Source: loadbalancer-svc (Service)  |  Target: worker-node-1 (Node)
+  ────────────────────────────────────────────────────────────
+  loadbalancer-svc (Service)  --[routes-to]-->  api-server (Pod)
+  api-server (Pod)  --[uses]-->  sa-worker (ServiceAccount)  [CVE-2023-4567, CVSS 7.2]
+  sa-worker (ServiceAccount)  --[bound-to]-->  pod-exec (Role)
+  pod-exec (Role)  --[can-exec-on]-->  worker-node-1 (Node)  [CVE-2024-3116, CVSS 9.0]
+  Remediation:
+    - Patch CVE-2023-4567 (CVSS 7.2) on 'sa-worker'.
+    - Remove RoleBinding 'pod-exec' from service account 'sa-worker'.
+    - Patch CVE-2024-3116 (CVSS 9.0) on 'worker-node-1'.
+
+  Path #8  |  5 hops  |  Risk Score: 20.0  [CRITICAL]
+  Source: dev-2 (User)  |  Target: data-pvc (PersistentVolume)
+  ────────────────────────────────────────────────────────────
+  dev-2 (User)  --[can-exec]-->  log-aggregator (Pod)  [CVE-2024-9999, CVSS 6.5]
+  log-aggregator (Pod)  --[uses]-->  sa-logger (ServiceAccount)
+  sa-logger (ServiceAccount)  --[bound-to]-->  node-reader (Role)
+  node-reader (Role)  --[can-read]-->  worker-node-1 (Node)
+  worker-node-1 (Node)  --[mounts]-->  data-pvc (PersistentVolume)
+  Remediation:
+    - Patch CVE-2024-9999 (CVSS 6.5) on 'log-aggregator'.
+    - Revoke 'can-exec' permission from 'dev-2' to 'log-aggregator'.
+    - Remove RoleBinding 'node-reader' from service account 'sa-logger'.
+
+  Path #9  |  5 hops  |  Risk Score: 20.5  [CRITICAL]
+  Source: internet (ExternalActor)  |  Target: worker-node-1 (Node)
+  ────────────────────────────────────────────────────────────
+  internet (ExternalActor)  --[reaches]-->  loadbalancer-svc (Service)
+  loadbalancer-svc (Service)  --[routes-to]-->  api-server (Pod)
+  api-server (Pod)  --[uses]-->  sa-worker (ServiceAccount)  [CVE-2023-4567, CVSS 7.2]
+  sa-worker (ServiceAccount)  --[bound-to]-->  pod-exec (Role)
+  pod-exec (Role)  --[can-exec-on]-->  worker-node-1 (Node)  [CVE-2024-3116, CVSS 9.0]
+  Remediation:
+    - Patch CVE-2023-4567 (CVSS 7.2) on 'sa-worker'.
+    - Remove RoleBinding 'pod-exec' from service account 'sa-worker'.
+    - Patch CVE-2024-3116 (CVSS 9.0) on 'worker-node-1'.
+
+  Path #10  |  5 hops  |  Risk Score: 22.0  [CRITICAL]
+  Source: dev-1 (User)  |  Target: data-pvc (PersistentVolume)
+  ────────────────────────────────────────────────────────────
+  dev-1 (User)  --[can-exec]-->  background-worker (Pod)
+  background-worker (Pod)  --[uses]-->  sa-worker (ServiceAccount)
+  sa-worker (ServiceAccount)  --[bound-to]-->  pod-exec (Role)
+  pod-exec (Role)  --[can-exec-on]-->  worker-node-1 (Node)  [CVE-2024-3116, CVSS 9.0]
+  worker-node-1 (Node)  --[mounts]-->  data-pvc (PersistentVolume)
+  Remediation:
+    - Revoke 'can-exec' permission from 'dev-1' to 'background-worker'.
+    - Remove RoleBinding 'pod-exec' from service account 'sa-worker'.
+    - Patch CVE-2024-3116 (CVSS 9.0) on 'worker-node-1'.
+
+  Path #11  |  5 hops  |  Risk Score: 22.1  [CRITICAL]
+  Source: loadbalancer-svc (Service)  |  Target: production-db (Database)
+  ────────────────────────────────────────────────────────────
+  loadbalancer-svc (Service)  --[routes-to]-->  web-frontend (Pod)
+  web-frontend (Pod)  --[uses]-->  sa-webapp (ServiceAccount)
+  sa-webapp (ServiceAccount)  --[bound-to]-->  secret-reader (Role)
+  secret-reader (Role)  --[can-read]-->  db-credentials (Secret)
+  db-credentials (Secret)  --[grants-access-to]-->  production-db (Database)
+  Remediation:
+    - Remove RoleBinding 'secret-reader' from service account 'sa-webapp'.
+    - Revoke secret-read permission on 'db-credentials' from 'secret-reader'.
+    - Rotate secret 'db-credentials' and restrict downstream access to 'production-db'.
+
+  Path #12  |  5 hops  |  Risk Score: 23.1  [CRITICAL]
+  Source: internet (ExternalActor)  |  Target: production-db (Database)
+  ────────────────────────────────────────────────────────────
+  internet (ExternalActor)  --[reaches]-->  web-frontend (Pod)  [CVE-2024-1234, CVSS 8.1]
+  web-frontend (Pod)  --[uses]-->  sa-webapp (ServiceAccount)
+  sa-webapp (ServiceAccount)  --[bound-to]-->  secret-reader (Role)
+  secret-reader (Role)  --[can-read]-->  db-credentials (Secret)
+  db-credentials (Secret)  --[grants-access-to]-->  production-db (Database)
+  Remediation:
+    - Patch CVE-2024-1234 (CVSS 8.1) on 'web-frontend'.
+    - Remove RoleBinding 'secret-reader' from service account 'sa-webapp'.
+    - Revoke secret-read permission on 'db-credentials' from 'secret-reader'.
+
+  Path #13  |  5 hops  |  Risk Score: 23.5  [CRITICAL]
+  Source: loadbalancer-svc (Service)  |  Target: data-pvc (PersistentVolume)
+  ────────────────────────────────────────────────────────────
+  loadbalancer-svc (Service)  --[routes-to]-->  api-server (Pod)
+  api-server (Pod)  --[uses]-->  sa-worker (ServiceAccount)  [CVE-2023-4567, CVSS 7.2]
+  sa-worker (ServiceAccount)  --[bound-to]-->  pod-exec (Role)
+  pod-exec (Role)  --[can-exec-on]-->  worker-node-1 (Node)  [CVE-2024-3116, CVSS 9.0]
+  worker-node-1 (Node)  --[mounts]-->  data-pvc (PersistentVolume)
+  Remediation:
+    - Patch CVE-2023-4567 (CVSS 7.2) on 'sa-worker'.
+    - Remove RoleBinding 'pod-exec' from service account 'sa-worker'.
+    - Patch CVE-2024-3116 (CVSS 9.0) on 'worker-node-1'.
+
+  Path #14  |  5 hops  |  Risk Score: 24.1  [CRITICAL]
+  Source: dev-1 (User)  |  Target: production-db (Database)
+  ────────────────────────────────────────────────────────────
+  dev-1 (User)  --[can-exec]-->  web-frontend (Pod)  [CVE-2024-1234, CVSS 8.1]
+  web-frontend (Pod)  --[uses]-->  sa-webapp (ServiceAccount)
+  sa-webapp (ServiceAccount)  --[bound-to]-->  secret-reader (Role)
+  secret-reader (Role)  --[can-read]-->  db-credentials (Secret)
+  db-credentials (Secret)  --[grants-access-to]-->  production-db (Database)
+  Remediation:
+    - Patch CVE-2024-1234 (CVSS 8.1) on 'web-frontend'.
+    - Revoke 'can-exec' permission from 'dev-1' to 'web-frontend'.
+    - Remove RoleBinding 'secret-reader' from service account 'sa-webapp'.
+
+  Path #15  |  6 hops  |  Risk Score: 25.5  [CRITICAL]
+  Source: internet (ExternalActor)  |  Target: data-pvc (PersistentVolume)
+  ────────────────────────────────────────────────────────────
+  internet (ExternalActor)  --[reaches]-->  loadbalancer-svc (Service)
+  loadbalancer-svc (Service)  --[routes-to]-->  api-server (Pod)
+  api-server (Pod)  --[uses]-->  sa-worker (ServiceAccount)  [CVE-2023-4567, CVSS 7.2]
+  sa-worker (ServiceAccount)  --[bound-to]-->  pod-exec (Role)
+  pod-exec (Role)  --[can-exec-on]-->  worker-node-1 (Node)  [CVE-2024-3116, CVSS 9.0]
+  worker-node-1 (Node)  --[mounts]-->  data-pvc (PersistentVolume)
+  Remediation:
+    - Patch CVE-2023-4567 (CVSS 7.2) on 'sa-worker'.
+    - Remove RoleBinding 'pod-exec' from service account 'sa-worker'.
+    - Patch CVE-2024-3116 (CVSS 9.0) on 'worker-node-1'.
+
+  Path #16  |  5 hops  |  Risk Score: 31.0  [CRITICAL]
+  Source: loadbalancer-svc (Service)  |  Target: kube-system (Namespace)
+  ────────────────────────────────────────────────────────────
+  loadbalancer-svc (Service)  --[routes-to]-->  web-frontend (Pod)
+  web-frontend (Pod)  --[falls-back-to]-->  default (ServiceAccount)
+  default (ServiceAccount)  --[bound-to]-->  cluster-admin (ClusterRole)
+  cluster-admin (ClusterRole)  --[can-read]-->  admin-token (Secret)
+  admin-token (Secret)  --[grants-access-to]-->  kube-system (Namespace)
+  Remediation:
+    - Assign a dedicated service account to 'web-frontend' instead of 'default'.
+    - Remove ClusterRoleBinding 'cluster-admin' from service account 'default'.
+    - Revoke secret-read permission on 'admin-token' from 'cluster-admin'.
+
+  Path #17  |  5 hops  |  Risk Score: 32.0  [CRITICAL]
+  Source: internet (ExternalActor)  |  Target: kube-system (Namespace)
+  ────────────────────────────────────────────────────────────
+  internet (ExternalActor)  --[reaches]-->  web-frontend (Pod)  [CVE-2024-1234, CVSS 8.1]
+  web-frontend (Pod)  --[falls-back-to]-->  default (ServiceAccount)
+  default (ServiceAccount)  --[bound-to]-->  cluster-admin (ClusterRole)
+  cluster-admin (ClusterRole)  --[can-read]-->  admin-token (Secret)
+  admin-token (Secret)  --[grants-access-to]-->  kube-system (Namespace)
+  Remediation:
+    - Patch CVE-2024-1234 (CVSS 8.1) on 'web-frontend'.
+    - Assign a dedicated service account to 'web-frontend' instead of 'default'.
+    - Remove ClusterRoleBinding 'cluster-admin' from service account 'default'.
+
+  Path #18  |  5 hops  |  Risk Score: 33.0  [CRITICAL]
+  Source: dev-1 (User)  |  Target: kube-system (Namespace)
+  ────────────────────────────────────────────────────────────
+  dev-1 (User)  --[can-exec]-->  web-frontend (Pod)  [CVE-2024-1234, CVSS 8.1]
+  web-frontend (Pod)  --[falls-back-to]-->  default (ServiceAccount)
+  default (ServiceAccount)  --[bound-to]-->  cluster-admin (ClusterRole)
+  cluster-admin (ClusterRole)  --[can-read]-->  admin-token (Secret)
+  admin-token (Secret)  --[grants-access-to]-->  kube-system (Namespace)
+  Remediation:
+    - Patch CVE-2024-1234 (CVSS 8.1) on 'web-frontend'.
+    - Revoke 'can-exec' permission from 'dev-1' to 'web-frontend'.
+    - Assign a dedicated service account to 'web-frontend' instead of 'default'.
+
+
+[ SECTION 2 — BLAST RADIUS ANALYSIS (BFS, depth=3) ]
+
+  Source: internet  →  12 reachable resource(s) within 3 hops
+    Hop 1: loadbalancer-svc, web-frontend
+    Hop 2: api-server, sa-webapp, default, internal-api-svc
+    Hop 3: sa-worker, db-url-config, api-key, secret-reader, tls-cert, cluster-admin
+
+  Source: dev-1  →  12 reachable resource(s) within 3 hops
+    Hop 1: web-frontend, background-worker
+    Hop 2: sa-webapp, default, internal-api-svc, sa-worker
+    Hop 3: secret-reader, tls-cert, api-key, cluster-admin, api-server, pod-exec
+
+  Source: dev-2  →  4 reachable resource(s) within 3 hops
+    Hop 1: log-aggregator
+    Hop 2: sa-logger, app-env-config
+    Hop 3: node-reader
+
+  Source: cicd-bot  →  3 reachable resource(s) within 3 hops
+    Hop 1: sa-cicd
+    Hop 2: deployer, cicd-deploy-token
+
+  Source: loadbalancer-svc  →  13 reachable resource(s) within 3 hops
+    Hop 1: api-server, web-frontend
+    Hop 2: sa-worker, db-url-config, api-key, sa-webapp, default, internal-api-svc
+    Hop 3: pod-exec, analytics-db, secret-reader, tls-cert, cluster-admin
+
+[ SECTION 3 — CIRCULAR PERMISSION DETECTION (DFS) ]
+  ⚠  1 cycle(s) detected
+
+  Cycle #1: service-a ↔ service-b
+    Remediation: Break cycle: revoke permission from service-a to service-b.
+
+[ SECTION 4 — CRITICAL NODE ANALYSIS ]
+  Computing... (removing each node and recounting paths)
+
+  Baseline attack paths : 46
+
+  ★  RECOMMENDATION:
+     Remove permission binding 'web-frontend' (Pod) to eliminate 32 of 46 attack paths.
+
+  Top 5 highest-impact nodes to remove:
+    web-frontend                   (Pod            )  -32 paths  ████████████████████
+    api-server                     (Pod            )  -24 paths  ████████████████████
+    internal-api-svc               (Service        )  -16 paths  ████████████████
+    sa-worker                      (ServiceAccount )  -14 paths  ██████████████
+    pod-exec                       (Role           )  -14 paths  ██████████████
+
+══════════════════════════════════════════════════════════════════
+  SUMMARY
+  Attack paths found   : 18
+  Circular permissions : 1
+  Total blast-radius nodes exposed : 44
+  Critical node to remove : web-frontend
+══════════════════════════════════════════════════════════════════
